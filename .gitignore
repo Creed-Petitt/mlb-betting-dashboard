@@ -1,20 +1,5 @@
-# Python
+*.csv
+*.joblib
+*.db
 __pycache__/
-*.py[cod]
-*.egg-info/
-.venv/
-
-# Jupyter
-.ipynb_checkpoints
-
-# Models
-models/*.pkl
-models/*.joblib
-
-# Data
-data/*.csv
-data/*.json
-
-# VS Code / PyCharm
-.vscode/
-.idea/
+data/cache/
