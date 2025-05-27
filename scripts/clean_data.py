@@ -1,14 +1,14 @@
 import sqlite3
 import pandas as pd
 
-# === Connect to DB and reset clean table ===
+# Connect to DB and reset clean table 
 conn = sqlite3.connect("data/mlb.db")
 conn.execute("DROP TABLE IF EXISTS clean_plate_appearances")
 
 years = list(range(2015, 2025))
 hit_events = ['single', 'double', 'triple', 'home_run']
 
-# === Park factor by home team ===
+# Park factor by home team
 PARK_FACTORS = {
     'ARI': 1.02, 'ATL': 0.99, 'BAL': 0.95, 'BOS': 1.03, 'CHC': 1.01,
     'CIN': 1.04, 'CLE': 1.00, 'COL': 1.15, 'CWS': 0.98, 'DET': 0.99,
@@ -18,7 +18,7 @@ PARK_FACTORS = {
     'STL': 1.00, 'TB': 0.94,  'TEX': 1.04, 'TOR': 1.03, 'WSH': 0.99,
 }
 
-# === TB, Run, SO mappings ===
+# TB, Run, SO mappings 
 TB_MAP = {
     'single': 1, 'double': 2, 'triple': 3, 'home_run': 4
 }
@@ -48,18 +48,18 @@ for year in years:
         print(f"No data for {year}. Skipping.")
         continue
 
-    # === Clean and standardize ===
+    # Clean and standardize
     df.rename(columns={"player_name": "pitcher_name"}, inplace=True)
     df['game_date'] = pd.to_datetime(df['game_date'].str.strip(), errors='coerce')
     df.dropna(subset=['game_date', 'batter', 'pitcher', 'stand', 'p_throws'], inplace=True)
     df['is_hit'] = df['events'].isin(hit_events).astype(int)
 
-    # === Targets for other props
+    # Targets for other props
     df['total_bases'] = df['events'].map(TB_MAP).fillna(0).astype(int)
     df['is_run_scored'] = df.apply(lambda row: did_batter_score(row['events'], row.get('description', '')), axis=1)
     df['is_batter_strikeout'] = df['events'].apply(is_batter_strikeout)
 
-    # === Derive batter_team and pitcher_team from inning_topbot
+    # Derive batter_team and pitcher_team from inning_topbot
     df['batter_team'] = df.apply(
         lambda row: row['home_team'] if row['inning_topbot'] == 'Bot' else row['away_team'],
         axis=1
@@ -69,13 +69,13 @@ for year in years:
         axis=1
     )
 
-    # === Engineered features
+    # Engineered features
     df['is_home_game'] = (df['home_team'] == df['batter_team']).astype(int)
     df['day_of_week'] = df['game_date'].dt.dayofweek
     df['park_factor'] = df['home_team'].map(PARK_FACTORS).fillna(1.00)
     df['is_same_side'] = (df['stand'] == df['p_throws']).astype(int)
 
-    # === Rolling averages
+    # Rolling averages
     df = df.sort_values(['batter', 'game_date'])
     df['batter_hits_5g'] = (
         df.groupby('batter')['is_hit']
@@ -90,7 +90,7 @@ for year in years:
         .reset_index(level=0, drop=True)
     )
 
-    # === Save to clean table
+    # Save to clean table
     df.to_sql("clean_plate_appearances", conn, if_exists="append", index=False)
     print(f"{len(df)} rows saved for {year}.")
 

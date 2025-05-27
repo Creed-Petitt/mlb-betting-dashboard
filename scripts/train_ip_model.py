@@ -5,12 +5,12 @@ from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.preprocessing import LabelEncoder
 import joblib
 
-# === Load pitcher game-level data ===
+# Load pitcher game-level data 
 conn = sqlite3.connect("data/mlb.db")
 df = pd.read_sql_query("SELECT * FROM pitcher_game_stats", conn)
 conn.close()
 
-# === Drop missing rows ===
+# Drop missing rows 
 df.dropna(subset=[
     'pitcher_hits_allowed_5g',
     'p_throws',
@@ -22,11 +22,11 @@ df.dropna(subset=[
     'game_innings_pitched'
 ], inplace=True)
 
-# === Encode categoricals ===
+# Encode categoricals
 for col in ['p_throws', 'pitcher_team', 'batter_team']:
     df[col] = LabelEncoder().fit_transform(df[col])
 
-# === Features + target ===
+# Features + target
 features = [
     'pitcher_hits_allowed_5g',
     'p_throws',
@@ -39,7 +39,7 @@ features = [
 X = df[features]
 y = df['game_innings_pitched']
 
-# === Time-based split ===
+# Time-based split
 df['game_date'] = pd.to_datetime(df['game_date'])
 train_df = df[df['game_date'] < '2023-01-01']
 test_df = df[df['game_date'] >= '2023-01-01']
@@ -48,7 +48,7 @@ y_train = train_df['game_innings_pitched']
 X_test = test_df[features]
 y_test = test_df['game_innings_pitched']
 
-# === Train model ===
+# Train model
 model = RandomForestRegressor(
     n_estimators=200,
     max_depth=15,
@@ -57,7 +57,7 @@ model = RandomForestRegressor(
 )
 model.fit(X_train, y_train)
 
-# === Evaluate ===
+# Evaluate
 y_pred = model.predict(X_test)
 mse = mean_squared_error(y_test, y_pred)
 r2 = r2_score(y_test, y_pred)
@@ -66,7 +66,7 @@ print("\nInnings Pitched (Regression):")
 print(f"  MSE: {mse:.3f}")
 print(f"  R² : {r2:.3f}")
 
-# === Save model ===
+# Save model 
 joblib.dump(model, "model/model_rf_innings_pitched.joblib")
 print("Saved: model_rf_innings_pitched.joblib")
 

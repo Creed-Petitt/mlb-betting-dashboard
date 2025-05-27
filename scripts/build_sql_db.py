@@ -6,34 +6,25 @@ from pybaseball import statcast
 from sqlalchemy import create_engine
 import warnings
 
-# -------------------------------
 # Suppress Pybaseball Warnings
-# -------------------------------
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-# -------------------------------
 # Configurable Parameters
-# -------------------------------ce 
 START_YEAR = 2015
 END_YEAR = 2024
 DATA_DIR = "data/cache"
 DB_PATH = "data/mlb.db"
 
-# -------------------------------
 # Set up SQLAlchemy SQLite Engine
-# -------------------------------
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs("data", exist_ok=True)
 engine = create_engine(f"sqlite:///{DB_PATH}")
 
-# -------------------------------
 # Month Ranges to Pull (March to October)
-# -------------------------------
 MONTHS = ["03", "04", "05", "06", "07", "08", "09", "10"]
 
-# -------------------------------
+
 # Loop over each year/month and load into DB
-# -------------------------------
 for year in range(START_YEAR, END_YEAR + 1):
     for month in MONTHS:
         start_date = f"{year}-{month}-01"
