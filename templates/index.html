@@ -7,8 +7,12 @@
   <h1>MLB Prop Predictor</h1>
 
   <form action="/predict_prop" method="post">
-    <label for="player_name">Player Name:</label><br>
-    <input type="text" id="player_name" name="player_name" required><br><br>
+    <label for="player_name">Select Player:</label><br>
+    <select id="player_name" name="player_name">
+      {% for pid, name in players %}
+        <option value="{{ name }}">{{ name }}</option>
+      {% endfor %}
+    </select><br><br>
 
     <label for="prop_type">Prop Type:</label><br>
     <select id="prop_type" name="prop_type">
