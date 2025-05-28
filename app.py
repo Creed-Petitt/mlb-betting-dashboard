@@ -58,17 +58,28 @@ def init_db():
     conn.close()
 
 # Get dropdown list of players
-def get_unique_players():
+def get_upcoming_players():
     conn = sqlite3.connect("data/mlb.db")
-    batters = pd.read_sql("SELECT DISTINCT batter FROM game_level_stats", conn)['batter'].tolist()
-    pitchers = pd.read_sql("SELECT DISTINCT pitcher FROM pitcher_game_stats", conn)['pitcher'].tolist()
-    all_ids = sorted(set(batters + pitchers))
 
-    name_df = playerid_reverse_lookup(all_ids, key_type='mlbam')
-    name_map = dict(zip(name_df['key_mlbam'], name_df['name_first'] + ' ' + name_df['name_last']))
+    # Get all pitcher and batter IDs from upcoming games
+    result = conn.execute("""
+        SELECT DISTINCT home_pitcher_id FROM upcoming_games WHERE home_pitcher_id IS NOT NULL
+        UNION
+        SELECT DISTINCT away_pitcher_id FROM upcoming_games WHERE away_pitcher_id IS NOT NULL
+    """).fetchall()
+
+    pitcher_ids = [row[0] for row in result if row[0] is not None]
+
+    # You'll eventually want batters too — for now, let's assume all starters might have props
+    print("Getting pitcher names...")
+    name_df = playerid_reverse_lookup(pitcher_ids, key_type="mlbam")
+    print("Done.")
+
+    name_map = dict(zip(name_df["key_mlbam"], name_df["name_first"] + " " + name_df["name_last"]))
+
     conn.close()
+    return [(pid, name_map.get(pid, f"Unknown {pid}")) for pid in pitcher_ids]
 
-    return [(pid, name_map.get(pid, f"Unknown {pid}")) for pid in all_ids]
 
 # Lookup player ID from name
 def get_mlbam_id(name):
@@ -82,7 +93,7 @@ def get_mlbam_id(name):
 
 @app.route("/")
 def home():
-    player_list = get_unique_players()
+    player_list = get_upcoming_players()
     return render_template("index.html", players=player_list)
 
 @app.route("/predict_prop", methods=["POST"])
