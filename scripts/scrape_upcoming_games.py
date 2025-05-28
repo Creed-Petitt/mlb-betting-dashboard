@@ -1,18 +1,10 @@
 import requests
 from datetime import datetime, timedelta
 
-
 def get_upcoming_games(days_ahead=5):
     """
     Fetch upcoming MLB games and probable pitchers using MLB's Stats API.
-
-    Args:
-        days_ahead (int): How many future days to load (starting from today)
-
-    Returns:
-        List[Dict]: Each dict contains game_date, home/away teams, and probable pitchers (name and ID if available)
     """
-    # Define date range: today to today + N days
     today = datetime.now().date()
     end_date = today + timedelta(days=days_ahead)
 
@@ -25,13 +17,9 @@ def get_upcoming_games(days_ahead=5):
     )
 
     response = requests.get(url)
-    if response.status_code != 200:
-        raise Exception(f"API failed: {response.status_code}")
-
     data = response.json()
 
     games = []
-
     for date_block in data.get("dates", []):
         for game in date_block.get("games", []):
             home_team = game["teams"]["home"]["team"]["name"]
@@ -53,10 +41,34 @@ def get_upcoming_games(days_ahead=5):
 
     return games
 
+import sqlite3
 
-# Test it live
+def save_upcoming_games_to_db(games):
+    """
+    Saves list of upcoming game dicts to the upcoming_games table.
+    Wipes existing rows before inserting.
+    """
+    conn = sqlite3.connect("data/mlb.db")
+    conn.execute("DELETE FROM upcoming_games")  # Clear old games
+
+    for g in games:
+        conn.execute("""
+            INSERT INTO upcoming_games (
+                game_date, home_team, away_team,
+                home_pitcher, home_pitcher_id,
+                away_pitcher, away_pitcher_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            g['game_date'], g['home_team'], g['away_team'],
+            g['home_pitcher'], g['home_pitcher_id'],
+            g['away_pitcher'], g['away_pitcher_id']
+        ))
+    conn.commit()
+    conn.close()
+
+
 if __name__ == "__main__":
-    print("Fetching upcoming games...")
     upcoming = get_upcoming_games(days_ahead=5)
-    for game in upcoming:
-        print(game)
+    save_upcoming_games_to_db(upcoming)
+    print(f"Saved {len(upcoming)} upcoming games to DB.")
