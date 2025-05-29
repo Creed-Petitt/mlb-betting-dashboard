@@ -4,8 +4,16 @@ import sqlite3
 import pandas as pd
 from pybaseball import playerid_lookup, playerid_reverse_lookup
 from datetime import datetime
+from dotenv import load_dotenv
+import os
+import requests
+from utils.props import get_fanduel_hit_props, save_hit_props_to_db
+
 
 app = Flask(__name__)
+
+load_dotenv()
+ODDS_API_KEY = os.getenv("ODDS_API_KEY")
 
 # Load models
 models = {
@@ -123,9 +131,6 @@ def get_upcoming_players():
     conn.close()
 
     return [(pid, cached_dict.get(pid, f"Unknown {pid}")) for pid in pitcher_ids]
-
-
-
 
 # Lookup player ID from name
 def get_mlbam_id(name):
@@ -248,9 +253,8 @@ def predict_prop():
     except Exception as e:
         return render_template("index.html", prediction="Error", over_under=str(e), players=get_upcoming_players())
 
-
 if __name__ == "__main__":
-    init_db()
-    init_player_cache()
-    app.run(debug=True)
+    props = get_fanduel_hit_props()
+    save_hit_props_to_db(props)
+
 
