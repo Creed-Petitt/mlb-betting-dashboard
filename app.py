@@ -139,8 +139,53 @@ def get_mlbam_id(name):
 
 @app.route("/")
 def home():
-    player_list = get_upcoming_players()
-    return render_template("index.html", players=player_list)
+    conn = sqlite3.connect("data/mlb.db")
+
+    # Get all future pitcher and batter IDs
+    ids = conn.execute("""
+        SELECT DISTINCT home_pitcher_id FROM upcoming_games
+        UNION
+        SELECT DISTINCT away_pitcher_id FROM upcoming_games
+    """).fetchall()
+    pitcher_ids = [row[0] for row in ids if row[0] is not None]
+
+    # Get their names from cache
+    cached = conn.execute("""
+        SELECT player_id, player_name FROM cached_player_names
+        WHERE player_id IN ({})
+    """.format(",".join("?" * len(pitcher_ids))), pitcher_ids).fetchall()
+    id_to_name = {pid: name for pid, name in cached}
+
+    props = []
+    for pid in pitcher_ids:
+        for prop_type in ["so", "ip"]:
+            table = "pitcher_game_stats"
+            features = feature_map[prop_type]
+            df = pd.read_sql_query(
+                f"SELECT * FROM {table} WHERE pitcher = ? ORDER BY game_date DESC LIMIT 1",
+                conn, params=[pid]
+            )
+            if df.empty:
+                continue
+            row = df.iloc[0]
+            if 'p_throws' in features:
+                row['p_throws'] = p_throws_map.get(row['p_throws'], 0)
+            if 'pitcher_team' in features:
+                row['pitcher_team'] = team_map.get(row['pitcher_team'], 0)
+            if 'batter_team' in features:
+                row['batter_team'] = team_map.get(row['batter_team'], 0)
+            input_data = [row[f] for f in features]
+            prediction = models[prop_type].predict([input_data])[0]
+            props.append({
+                "player_name": id_to_name.get(pid, f"Unknown {pid}"),
+                "prop_type": prop_type,
+                "prediction": round(prediction, 2)
+            })
+
+    conn.close()
+    return render_template("index.html", props=props)
+
+
 
 @app.route("/predict_prop", methods=["POST"])
 def predict_prop():
