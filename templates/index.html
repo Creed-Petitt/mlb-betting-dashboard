@@ -8,11 +8,8 @@
 
   <form action="/predict_prop" method="post">
     <label for="player_name">Select Player:</label><br>
-    <select id="player_name" name="player_name">
-      {% for pid, name in players %}
-        <option value="{{ name }}">{{ name }}</option>
-      {% endfor %}
-    </select><br><br>
+    <input type="text" id="player_name" name="player_name" placeholder="Enter full name (e.g. Aaron Judge)" required>
+
 
     <label for="prop_type">Prop Type:</label><br>
     <select id="prop_type" name="prop_type">
