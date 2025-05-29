@@ -57,28 +57,74 @@ def init_db():
     """)
     conn.close()
 
-# Get dropdown list of players
+def init_player_cache():
+    conn = sqlite3.connect("data/mlb.db")
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS cached_player_names (
+        player_id INTEGER PRIMARY KEY,
+        player_name TEXT,
+        last_updated TEXT
+    )
+    """)
+    conn.close()
+
+
 def get_upcoming_players():
+    from pybaseball import playerid_reverse_lookup
+    from datetime import datetime
+
     conn = sqlite3.connect("data/mlb.db")
 
-    # Get all pitcher and batter IDs from upcoming games
+    # Get all unique player ids from upcoming games
     result = conn.execute("""
         SELECT DISTINCT home_pitcher_id FROM upcoming_games WHERE home_pitcher_id IS NOT NULL
         UNION
         SELECT DISTINCT away_pitcher_id FROM upcoming_games WHERE away_pitcher_id IS NOT NULL
     """).fetchall()
+    pitcher_ids = [int(row[0]) for row in result]
 
-    pitcher_ids = [row[0] for row in result if row[0] is not None]
+    # Get probable batter ids
+    # For now: fetch all batter IDs from recent games (say last 7 days) — a simple heuristic
+    batter_result = conn.execute("""
+        SELECT DISTINCT batter FROM game_level_stats
+        WHERE game_date >= DATE('now', '-7 day') AND batter IS NOT NULL
+    """).fetchall()
+    batter_ids = [int(row[0]) for row in batter_result]
 
-    # You'll eventually want batters too — for now, let's assume all starters might have props
-    print("Getting pitcher names...")
-    name_df = playerid_reverse_lookup(pitcher_ids, key_type="mlbam")
-    print("Done.")
+    # Combine all IDs
+    all_ids = sorted(set(pitcher_ids + batter_ids))
 
-    name_map = dict(zip(name_df["key_mlbam"], name_df["name_first"] + " " + name_df["name_last"]))
+    # Fetch from cache
+    cached = conn.execute(
+        f"""SELECT player_id, player_name FROM cached_player_names
+            WHERE player_id IN ({','.join(['?'] * len(all_ids))})
+        """, all_ids
+    ).fetchall()
+    cached_dict = {pid: name for pid, name in cached}
+
+    # Find missing ids
+    missing_ids = [pid for pid in all_ids if pid not in cached_dict]
+
+    # Fetch and cache missing games
+    if missing_ids:
+        new_df = playerid_reverse_lookup(missing_ids, key_type="mlbam")
+        new_df["full_name"] = new_df["name_first"] + " " + new_df["name_last"]
+
+        for _, row in new_df.iterrows():
+            pid = int(row["key_mlbam"])
+            name = row["full_name"]
+            cached_dict[pid] = name
+            conn.execute("""
+                INSERT OR REPLACE INTO cached_player_names (player_id, player_name, last_updated)
+                VALUES (?, ?, ?)
+            """, (pid, name, datetime.now().isoformat(timespec='seconds')))
+        conn.commit()
 
     conn.close()
-    return [(pid, name_map.get(pid, f"Unknown {pid}")) for pid in pitcher_ids]
+
+    return [(pid, cached_dict.get(pid, f"Unknown {pid}")) for pid in pitcher_ids]
+
+
 
 
 # Lookup player ID from name
@@ -104,7 +150,7 @@ def predict_prop():
 
     player_id = get_mlbam_id(name_input)
     if player_id is None:
-        return render_template("index.html", prediction="N/A", over_under="Invalid name", players=get_unique_players())
+        return render_template("index.html", prediction="N/A", over_under="Invalid name", players=get_upcoming_players())
 
     table = "pitcher_game_stats" if prop_type in ["so", "ip"] else "game_level_stats"
     features = feature_map[prop_type]
@@ -118,7 +164,7 @@ def predict_prop():
     conn.close()
 
     if df.empty:
-        return render_template("index.html", prediction="N/A", over_under="No game data", players=get_unique_players())
+        return render_template("index.html", prediction="N/A", over_under="No game data", players=get_upcoming_players())
 
     try:
         row = df.iloc[0]
@@ -153,11 +199,13 @@ def predict_prop():
         conn.commit()
         conn.close()
 
-        return render_template("index.html", prediction=round(prediction, 2), over_under=over_under, players=get_unique_players())
+        return render_template("index.html", prediction=round(prediction, 2), over_under=over_under, players=get_upcoming_players())
     except Exception as e:
-        return render_template("index.html", prediction="Error", over_under=str(e), players=get_unique_players())
+        return render_template("index.html", prediction="Error", over_under=str(e), players=get_upcoming_players())
 
 
 if __name__ == "__main__":
     init_db()
+    init_player_cache()
     app.run(debug=True)
+
