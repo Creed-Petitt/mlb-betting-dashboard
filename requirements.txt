@@ -22,6 +22,7 @@ debugpy==1.8.14
 decorator==5.2.1
 defusedxml==0.7.1
 Deprecated==1.2.18
+dotenv==0.9.9
 executing==2.2.0
 fastjsonschema==2.21.1
 Flask==3.1.1
@@ -86,6 +87,7 @@ PyJWT==2.10.1
 PyNaCl==1.5.0
 pyparsing==3.2.3
 python-dateutil==2.9.0.post0
+python-dotenv==1.1.0
 python-json-logger==3.3.0
 pytz==2025.2
 pywin32==310
