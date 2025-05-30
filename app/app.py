@@ -7,7 +7,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 import os
 import requests
-from utils.props import get_fanduel_hit_props, save_hit_props_to_db
+from props import get_fanduel_hit_props, save_hit_props_to_db
 
 
 app = Flask(__name__)
@@ -64,6 +64,27 @@ def init_db():
     )
     """)
     conn.close()
+
+def get_today_hit_predictions():
+    conn = sqlite3.connect("data/mlb.db")
+    df = pd.read_sql_query("""
+        SELECT player_name, line, prediction, over_under, timestamp
+        FROM predictions
+        WHERE prop_type = 'hits'
+        ORDER BY timestamp DESC
+    """, conn)
+    conn.close()
+
+    # Compute edge %
+    df["implied_prob"] = 1 / df["line"]
+    df["edge"] = (df["prediction"] - df["implied_prob"]) * 100
+    df["edge"] = df["edge"].round(1)
+    df.sort_values("edge", ascending=False, inplace=True)
+    df = df.drop_duplicates(subset=["player_name"], keep="first")
+    df["prediction"] = (df["prediction"] * 100).round(1)
+    df["implied_prob"] = (df["implied_prob"] * 100).round(1)
+
+    return df.to_dict(orient="records")
 
 def init_player_cache():
     conn = sqlite3.connect("data/mlb.db")
@@ -144,53 +165,8 @@ def get_mlbam_id(name):
 
 @app.route("/")
 def home():
-    conn = sqlite3.connect("data/mlb.db")
-
-    # Get all future pitcher and batter IDs
-    ids = conn.execute("""
-        SELECT DISTINCT home_pitcher_id FROM upcoming_games
-        UNION
-        SELECT DISTINCT away_pitcher_id FROM upcoming_games
-    """).fetchall()
-    pitcher_ids = [row[0] for row in ids if row[0] is not None]
-
-    # Get their names from cache
-    cached = conn.execute("""
-        SELECT player_id, player_name FROM cached_player_names
-        WHERE player_id IN ({})
-    """.format(",".join("?" * len(pitcher_ids))), pitcher_ids).fetchall()
-    id_to_name = {pid: name for pid, name in cached}
-
-    props = []
-    for pid in pitcher_ids:
-        for prop_type in ["so", "ip"]:
-            table = "pitcher_game_stats"
-            features = feature_map[prop_type]
-            df = pd.read_sql_query(
-                f"SELECT * FROM {table} WHERE pitcher = ? ORDER BY game_date DESC LIMIT 1",
-                conn, params=[pid]
-            )
-            if df.empty:
-                continue
-            row = df.iloc[0]
-            if 'p_throws' in features:
-                row['p_throws'] = p_throws_map.get(row['p_throws'], 0)
-            if 'pitcher_team' in features:
-                row['pitcher_team'] = team_map.get(row['pitcher_team'], 0)
-            if 'batter_team' in features:
-                row['batter_team'] = team_map.get(row['batter_team'], 0)
-            input_data = [row[f] for f in features]
-            prediction = models[prop_type].predict([input_data])[0]
-            props.append({
-                "player_name": id_to_name.get(pid, f"Unknown {pid}"),
-                "prop_type": prop_type,
-                "prediction": round(prediction, 2)
-            })
-
-    conn.close()
-    return render_template("index.html", props=props)
-
-
+    predictions = get_today_hit_predictions()
+    return render_template("index.html", predictions=predictions)
 
 @app.route("/predict_prop", methods=["POST"])
 def predict_prop():
@@ -254,7 +230,11 @@ def predict_prop():
         return render_template("index.html", prediction="Error", over_under=str(e), players=get_upcoming_players())
 
 if __name__ == "__main__":
+    # Optionally refresh props when server starts
     props = get_fanduel_hit_props()
     save_hit_props_to_db(props)
+
+    # Start the Flask app
+    app.run(debug=True)
 
 
