@@ -18,7 +18,6 @@ PARK_FACTORS = {
     'STL': 1.00, 'TB': 0.94,  'TEX': 1.04, 'TOR': 1.03, 'WSH': 0.99,
 }
 
-# TB, Run, SO mappings 
 TB_MAP = {
     'single': 1, 'double': 2, 'triple': 3, 'home_run': 4
 }
@@ -54,12 +53,13 @@ for year in years:
     df.dropna(subset=['game_date', 'batter', 'pitcher', 'stand', 'p_throws'], inplace=True)
     df['is_hit'] = df['events'].isin(hit_events).astype(int)
 
-    # Targets for other props
+    # Prop targets
     df['total_bases'] = df['events'].map(TB_MAP).fillna(0).astype(int)
     df['is_run_scored'] = df.apply(lambda row: did_batter_score(row['events'], row.get('description', '')), axis=1)
     df['is_batter_strikeout'] = df['events'].apply(is_batter_strikeout)
+    df['is_pitcher_run_allowed'] = df.apply(lambda row: did_batter_score(row['events'], row.get('description', '')), axis=1)
 
-    # Derive batter_team and pitcher_team from inning_topbot
+    # Derive teams from inning context
     df['batter_team'] = df.apply(
         lambda row: row['home_team'] if row['inning_topbot'] == 'Bot' else row['away_team'],
         axis=1
@@ -90,7 +90,12 @@ for year in years:
         .reset_index(level=0, drop=True)
     )
 
-    # Save to clean table
+    # Basic counting stats for batters
+    df['so'] = (df['events'].isin(['strikeout', 'strikeout_double_play'])).astype(int)
+    df['bb'] = (df['events'] == 'walk').astype(int)
+    df['ab'] = (~df['events'].isin(['walk', 'hit_by_pitch', 'sac_fly', 'sac_bunt', 'catcher_interference'])).astype(int)
+
+    # Save to SQL
     df.to_sql("clean_plate_appearances", conn, if_exists="append", index=False)
     print(f"{len(df)} rows saved for {year}.")
 
