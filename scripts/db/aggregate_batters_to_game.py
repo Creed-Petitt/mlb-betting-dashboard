@@ -1,14 +1,12 @@
 import sqlite3
 import pandas as pd
 
-# Connect to the database
+# Connect to the database and load clean plate appearances
 conn = sqlite3.connect("data/mlb.db")
-
-# Read in cleaned plate appearances
 df = pd.read_sql_query("SELECT * FROM clean_plate_appearances", conn)
 df["game_date"] = pd.to_datetime(df["game_date"])
 
-# Group by game and batter to aggregate into game-level stats
+# Group by batter per game and aggregate
 agg = df.groupby(['game_date', 'batter']).agg({
     'events': 'count',
     'is_hit': 'sum',
@@ -21,6 +19,7 @@ agg = df.groupby(['game_date', 'batter']).agg({
     'is_home_game': 'last',
     'batter_team': 'last',
     'pitcher_team': 'last',
+    'pitcher': 'last',  # ✅ this is the new column you need
     'stand': 'last',
     'p_throws': 'last',
     'day_of_week': 'last',
@@ -30,8 +29,7 @@ agg = df.groupby(['game_date', 'batter']).agg({
     'is_same_side': 'last'
 }).reset_index()
 
-
-# Rename columns for clarity
+# Rename for clarity
 agg = agg.rename(columns={
     'is_hit': 'game_hits',
     'total_bases': 'game_total_bases',
@@ -39,9 +37,10 @@ agg = agg.rename(columns={
     'is_run_scored': 'game_runs_scored'
 })
 
-# Save to SQL
+# Save result to SQL
 agg.to_sql("game_level_stats", conn, if_exists="replace", index=False)
 conn.close()
 
-print(f"Saved game_level_stats table with {len(agg)} rows.")
+print(f"Saved game_level_stats with {len(agg)} rows (including pitcher ID).")
+
 
