@@ -9,10 +9,7 @@ conn = sqlite3.connect("data/mlb.db")
 df = pd.read_sql("SELECT * FROM cleaned_plate_appearances", conn)
 print(f"Loaded {len(df)} rows from cleaned_plate_appearances")
 
-# =======================
 # BATTER GAME STATS
-# =======================
-
 print("Aggregating batter game-level stats...")
 
 # Get home team by batter-game
@@ -39,9 +36,7 @@ batter_game["is_home_game"] = (
 batter_game.to_sql("batter_game_stats", conn, if_exists="replace", index=False)
 print(f"Saved {len(batter_game)} batter-game rows")
 
-# =======================
 # PITCHER GAME STATS
-# =======================
 
 print("Aggregating pitcher game-level stats...")
 

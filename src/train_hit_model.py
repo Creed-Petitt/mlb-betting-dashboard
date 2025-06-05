@@ -11,10 +11,9 @@ from sklearn.metrics import classification_report, accuracy_score, confusion_mat
 import joblib
 
 # Load game-level features
-df = pd.read_sql("SELECT * FROM game_level_features", sqlite3.connect("data/mlb.db"), parse_dates=["game_date"])
-
-# Fix bad 'is_home_game' column
-df["is_home_game"] = (df["batter_team"] == df["pitcher_team"]).astype(int)
+conn = sqlite3.connect("data/mlb.db")
+df = pd.read_sql("SELECT * FROM game_level_features", conn, parse_dates=["game_date"])
+conn.close()
 
 # Drop rows with missing target
 df = df.dropna(subset=["hit_in_game"])
@@ -25,15 +24,16 @@ features = [
     "batter_plate_appearances", "batter_hits", "avg_launch_speed", "avg_launch_angle",
     "stand", "is_home_game", "batting_avg", "batter_hits_5g",
     "pitcher_plate_appearances", "pitcher_hits_allowed", "p_throws", "baa", "pitcher_hits_allowed_5g",
-    "career_avg", "career_baa"
+    "career_avg", "career_baa",
+    "batter_team", "pitcher_team"  # added as categorical features
 ]
 
 X = df[features].copy()
 y = df[target]
 
-# Split numeric and categorical features
-numeric_features = X.select_dtypes(include=["number"]).columns.tolist()
-categorical_features = X.select_dtypes(include=["object", "bool", "category"]).columns.tolist()
+# Automatically split numeric and categorical
+numeric_features = X.select_dtypes(include=["number", "bool"]).columns.tolist()
+categorical_features = X.select_dtypes(include=["object", "category"]).columns.tolist()
 
 # Define preprocessing
 numeric_transformer = SimpleImputer(strategy="mean")
@@ -47,16 +47,16 @@ preprocessor = ColumnTransformer([
     ("cat", categorical_transformer, categorical_features)
 ])
 
-# Build pipeline
+# Full model pipeline
 pipeline = Pipeline([
     ("preprocessor", preprocessor),
     ("classifier", RandomForestClassifier(n_estimators=100, random_state=42))
 ])
 
-# Split train/test
+# Split data
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Fit model
+# Train model
 pipeline.fit(X_train, y_train)
 
 # Evaluate

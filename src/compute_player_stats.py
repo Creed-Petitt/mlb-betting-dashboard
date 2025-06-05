@@ -103,3 +103,4 @@ pitcher_career.to_sql("pitcher_career_stats", conn, if_exists="replace", index=F
 
 conn.close()
 print("All player stats saved successfully.")
+ 
