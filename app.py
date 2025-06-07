@@ -1,11 +1,8 @@
-import os
 import sqlite3
 import pandas as pd
 from flask import Flask, render_template, request
 
-# Explicitly set template folder
 app = Flask(__name__, template_folder="templates")
-
 DB_PATH = "data/mlb.db"
 
 @app.route("/")
@@ -36,6 +33,7 @@ def player_detail(mlb_id):
 
     pitcher_id = None
     pitcher_name = None
+    pitcher_team_id = None
     match = games[
         (games["game_date"] == game_date) &
         ((games["home_team_id"] == team_id) | (games["away_team_id"] == team_id))
@@ -45,14 +43,18 @@ def player_detail(mlb_id):
         if row["home_team_id"] == team_id:
             pitcher_id = row["away_pitcher_id"]
             pitcher_name = row["away_pitcher_name"]
+            pitcher_team_id = row["away_team_id"]
         else:
             pitcher_id = row["home_pitcher_id"]
             pitcher_name = row["home_pitcher_name"]
+            pitcher_team_id = row["home_team_id"]
+
+    # FIX: correctly extract batter team_id from season DataFrame
+    batter_team_id = team_id
 
     pitcher = None
     if pitcher_id is not None:
-        pitcher_id = int(float(pitcher_id))  # cast properly
-
+        pitcher_id = int(float(pitcher_id))
         season_pit = pd.read_sql("SELECT * FROM external_pitcher_stats WHERE mlb_id = ?", conn, params=(pitcher_id,))
         career_pit = pd.read_sql("SELECT * FROM pitcher_career_stats WHERE pitcher = ?", conn, params=(pitcher_id,))
         pitcher = {
@@ -71,7 +73,10 @@ def player_detail(mlb_id):
         season=season.iloc[0].to_dict() if not season.empty else {},
         career=career.iloc[0].to_dict() if not career.empty else {},
         recent=recent.sort_values("game_date").to_dict(orient="records"),
-        pitcher=pitcher
+        pitcher=pitcher,
+        team_id=batter_team_id,
+        pitcher_id=pitcher_id,
+        pitcher_team_id=pitcher_team_id
     )
 
 if __name__ == "__main__":
