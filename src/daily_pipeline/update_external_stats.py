@@ -8,13 +8,12 @@ BATTER_TABLE = "external_batter_stats"
 PITCHER_TABLE = "external_pitcher_stats"
 TARGET_SEASON = "2025"
 
-def fetch_batter_stats(mlb_id):
+def fetch_batter_stats(mlb_id, full_name):
     try:
         url = f"https://statsapi.mlb.com/api/v1/people/{mlb_id}/stats?stats=yearByYear,career&group=hitting&sportId=1"
         r = requests.get(url).json()
-        stats = {"mlb_id": mlb_id}
+        stats = {"mlb_id": mlb_id, "full_name": full_name} # include name
 
-        # === Find 2025 season split ===
         year_by_year = next((blk for blk in r["stats"] if blk["type"]["displayName"] == "yearByYear"), None)
         if year_by_year:
             season_split = next((s["stat"] for s in year_by_year["splits"] if s.get("season") == TARGET_SEASON), None)
@@ -32,7 +31,6 @@ def fetch_batter_stats(mlb_id):
                     "season_strikeOuts": season_split.get("strikeOuts")
                 })
 
-        # === Find career stats split ===
         career_block = next((blk for blk in r["stats"] if blk["type"]["displayName"] == "career"), None)
         if career_block and career_block["splits"]:
             c = career_block["splits"][0]["stat"]
@@ -96,9 +94,9 @@ def fetch_pitcher_stats(mlb_id):
         print(f"Failed pitcher {mlb_id}: {e}")
         return None
 
-# === Load player IDs from DB ===
+# === Load player IDs and names from matched props ===
 conn = sqlite3.connect(DB_PATH)
-batters = pd.read_sql("SELECT DISTINCT mlb_id FROM matched_hit_props", conn)
+batters = pd.read_sql("SELECT DISTINCT mlb_id, full_name FROM matched_hit_props", conn)
 batters["mlb_id"] = pd.to_numeric(batters["mlb_id"], errors="coerce").dropna().astype(int)
 
 pitcher_rows = pd.read_sql("SELECT DISTINCT home_pitcher_id, away_pitcher_id FROM upcoming_games", conn)
@@ -108,10 +106,10 @@ for col in ["home_pitcher_id", "away_pitcher_id"]:
     pitcher_ids.update(ids)
 conn.close()
 
-# === Fetch batter stats ===
+# === Fetch batter stats with name ===
 batter_stats = []
-for pid in tqdm(batters["mlb_id"].tolist(), desc="Fetching batter stats"):
-    data = fetch_batter_stats(pid)
+for _, row in tqdm(batters.iterrows(), total=len(batters), desc="Fetching batter stats"):
+    data = fetch_batter_stats(row["mlb_id"], row["full_name"])
     if data:
         batter_stats.append(data)
 

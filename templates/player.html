@@ -5,32 +5,32 @@
   <title>Player Stats</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-900 text-white p-6">
-  <div class="max-w-5xl mx-auto">
-    <h1 class="text-3xl font-bold mb-8 text-center">Matchup Overview</h1>
+<body class="bg-gray-900 text-white p-8">
+  <div class="max-w-6xl mx-auto">
+    <h1 class="text-4xl font-bold mb-10 text-center">Matchup Breakdown</h1>
 
-    <div class="flex flex-col md:flex-row justify-around items-center mb-10 gap-6">
+    <div class="flex flex-col md:flex-row justify-around items-center mb-12 gap-6">
       <div class="flex flex-col items-center">
         <img src="{{ url_for('static', filename='team_logos/' ~ team_id | int ~ '.svg') }}"
-             alt="Team Logo" class="w-12 h-12 mb-1" />
-        <div class="text-lg font-semibold">{{ season.full_name or 'Batter' }}</div>
+             alt="Team Logo" class="w-16 h-16 mb-2" />
+        <div class="text-lg font-semibold">{{ season.full_name.title() if season.full_name else 'Batter' }}</div>
       </div>
 
-      <div class="text-2xl font-bold">vs</div>
+      <div class="text-3xl font-bold">vs</div>
 
       {% if pitcher %}
       <div class="flex flex-col items-center">
         <img src="{{ url_for('static', filename='team_logos/' ~ pitcher_team_id | int ~ '.svg') }}"
-             alt="Pitcher Team Logo" class="w-12 h-12 mb-1" />
-        <div class="text-lg font-semibold">{{ pitcher.name or 'Pitcher' }}</div>
+             alt="Pitcher Team Logo" class="w-16 h-16 mb-2" />
+        <div class="text-lg font-semibold">{{ pitcher.name }}</div>
       </div>
       {% endif %}
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-      <div class="bg-gray-800 border border-gray-700 rounded-xl p-4">
-        <h2 class="text-xl font-semibold mb-3">Season Stats</h2>
-        <ul class="space-y-1 text-md">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+      <div class="bg-gray-800 border border-gray-700 rounded-xl p-6">
+        <h2 class="text-xl font-semibold mb-4">Season Stats</h2>
+        <ul class="space-y-2 text-md">
           <li><strong>AVG:</strong> {{ season.season_avg | float | round(3) if season.season_avg else 'N/A' }}</li>
           <li><strong>OBP:</strong> {{ season.season_obp | float | round(3) if season.season_obp else 'N/A' }}</li>
           <li><strong>SLG:</strong> {{ season.season_slg | float | round(3) if season.season_slg else 'N/A' }}</li>
@@ -38,9 +38,9 @@
         </ul>
       </div>
 
-      <div class="bg-gray-800 border border-gray-700 rounded-xl p-4">
-        <h2 class="text-xl font-semibold mb-3">Career Stats</h2>
-        <ul class="space-y-1 text-md">
+      <div class="bg-gray-800 border border-gray-700 rounded-xl p-6">
+        <h2 class="text-xl font-semibold mb-4">Career Stats</h2>
+        <ul class="space-y-2 text-md">
           <li><strong>AVG:</strong> {{ career.career_avg | float | round(3) if career.career_avg else 'N/A' }}</li>
           <li><strong>Games:</strong> {{ career.career_games or 'N/A' }}</li>
           <li><strong>Hits:</strong> {{ career.career_hits or 'N/A' }}</li>
@@ -49,9 +49,9 @@
       </div>
     </div>
 
-    <div class="bg-gray-800 border border-gray-700 rounded-xl p-4 mb-6">
-      <h2 class="text-xl font-semibold mb-3">Last 5 Games</h2>
-      <ul class="space-y-1 text-md">
+    <div class="bg-gray-800 border border-gray-700 rounded-xl p-6 mb-8">
+      <h2 class="text-xl font-semibold mb-4">Last 5 Games</h2>
+      <ul class="space-y-2 text-md">
         {% for row in recent %}
           <li><strong>{{ row.game_date }}:</strong> {{ row.hits }}</li>
         {% else %}
@@ -60,10 +60,10 @@
       </ul>
     </div>
 
-    <div class="bg-gray-800 border border-gray-700 rounded-xl p-4">
-      <h2 class="text-xl font-semibold mb-3">Pitcher Matchup</h2>
+    <div class="bg-gray-800 border border-gray-700 rounded-xl p-6">
+      <h2 class="text-xl font-semibold mb-4">Pitcher Matchup</h2>
       {% if pitcher %}
-      <ul class="space-y-1 text-md">
+      <ul class="space-y-2 text-md">
         <li><strong>Season BAA:</strong> {{ pitcher.season_baa | float | round(3) if pitcher.season_baa else 'N/A' }}</li>
         <li><strong>ERA:</strong> {{ pitcher.season_era | float | round(2) if pitcher.season_era else 'N/A' }}</li>
         <li><strong>WHIP:</strong> {{ pitcher.season_whip | float | round(2) if pitcher.season_whip else 'N/A' }}</li>

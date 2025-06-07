@@ -5,23 +5,19 @@
   <title>MLB Hit Props</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-900 text-white p-6">
-  <h1 class="text-3xl font-bold mb-4">MLB Hit Prop Monitor</h1>
-  <p class="text-sm text-gray-400 mb-6">These props are scraped directly from FanDuel</p>
+<body class="bg-gray-900 text-white p-8">
+  <h1 class="text-4xl font-bold mb-6 text-center">MLB Hit Prop Monitor</h1>
+  <p class="text-md text-gray-400 mb-8 text-center">Props scraped from FanDuel – Click a player to view matchup</p>
 
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 max-w-7xl mx-auto">
     {% for prop in props %}
     <div
       onclick="window.location='/player/{{ prop.mlb_id|int }}?team_id={{ prop.team_id|int }}&date={{ prop.market_time[:10] }}'"
       class="cursor-pointer transition transform hover:scale-105
-             rounded-xl shadow-lg p-4 bg-gray-800 border border-gray-700 text-white">
-      <div class="flex justify-between items-center mb-2">
-        <h2 class="text-xl font-semibold">{{ prop.player }}</h2>
-      </div>
-      <div class="text-sm text-gray-300">
-        <p><strong>Prop:</strong> Hits</p>
-        <p><strong>Odds:</strong> {{ prop.american_odds }}</p>
-      </div>
+             rounded-xl shadow-md p-5 bg-gray-800 border border-gray-700 text-white">
+      <div class="text-lg font-semibold mb-1">{{ prop.player.title() }}</div>
+      <div class="text-sm text-gray-300"><strong>Prop:</strong> Hits</div>
+      <div class="text-sm text-gray-400"><strong>Odds:</strong> {{ prop.american_odds }}</div>
     </div>
     {% endfor %}
   </div>
