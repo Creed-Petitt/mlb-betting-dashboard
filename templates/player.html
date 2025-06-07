@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Player Stats</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white p-6">
+  <div class="max-w-4xl mx-auto">
+    <h1 class="text-3xl font-bold mb-6">Player Overview</h1>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="bg-gray-800 border border-gray-600 rounded-xl p-4">
+        <h2 class="text-lg font-semibold mb-2">Season Stats</h2>
+        <ul class="text-sm space-y-1">
+          <li><strong>AVG:</strong> {{ season.season_avg | float | round(3) if season.season_avg else 'N/A' }}</li>
+          <li><strong>OBP:</strong> {{ season.season_obp | float | round(3) if season.season_obp else 'N/A' }}</li>
+          <li><strong>SLG:</strong> {{ season.season_slg | float | round(3) if season.season_slg else 'N/A' }}</li>
+          <li><strong>OPS:</strong> {{ season.season_ops | float | round(3) if season.season_ops else 'N/A' }}</li>
+        </ul>
+      </div>
+
+      <div class="bg-gray-800 border border-gray-600 rounded-xl p-4">
+        <h2 class="text-lg font-semibold mb-2">Career Stats</h2>
+        <ul class="text-sm space-y-1">
+          <li><strong>AVG:</strong> {{ career.career_avg | float | round(3) if career.career_avg else 'N/A' }}</li>
+          <li><strong>Games:</strong> {{ career.career_games or 'N/A' }}</li>
+          <li><strong>Hits:</strong> {{ career.career_hits or 'N/A' }}</li>
+          <li><strong>At-Bats:</strong> {{ career.career_atBats or 'N/A' }}</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="mt-6 bg-gray-800 border border-gray-600 rounded-xl p-4">
+      <h2 class="text-lg font-semibold mb-2">Last 5 Games - Hits</h2>
+      <ul class="text-sm space-y-1">
+        {% for row in recent %}
+          <li><strong>{{ row.game_date }}:</strong> {{ row.hits }}</li>
+        {% else %}
+          <li>No recent games found.</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="mt-6 bg-gray-800 border border-gray-600 rounded-xl p-4">
+      <h2 class="text-lg font-semibold mb-2">Pitcher Matchup</h2>
+      {% if pitcher %}
+      <ul class="text-sm space-y-1">
+        <li><strong>Name:</strong> {{ pitcher.name or 'N/A' }}</li>
+        <li><strong>Season BAA:</strong> {{ pitcher.season_baa | float | round(3) if pitcher.season_baa else 'N/A' }}</li>
+        <li><strong>ERA:</strong> {{ pitcher.season_era | float | round(2) if pitcher.season_era else 'N/A' }}</li>
+        <li><strong>WHIP:</strong> {{ pitcher.season_whip | float | round(2) if pitcher.season_whip else 'N/A' }}</li>
+        <li><strong>Career BAA:</strong> {{ pitcher.career_baa | float | round(3) if pitcher.career_baa else 'N/A' }}</li>
+      </ul>
+      {% else %}
+      <p class="text-sm text-gray-400">No pitcher matchup info available.</p>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>

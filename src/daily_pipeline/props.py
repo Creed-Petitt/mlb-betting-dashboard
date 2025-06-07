@@ -28,7 +28,7 @@ def get_fanduel_hit_props():
                 american_odds = odds_info.get("americanDisplayOdds", {}).get("americanOdds")
 
                 # Print for debugging
-                print(player_name, "=>", american_odds)
+                #print(player_name, "=>", american_odds)
 
                 hit_props.append({
                     "event_id": event_id,
