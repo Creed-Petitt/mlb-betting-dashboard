@@ -1,8 +1,32 @@
-*.csv
-*.joblib
-*.db
+# Byte-compiled / optimized / DLL files
 __pycache__/
-data/cache/
-.ipynb_checkpoints/
+*.py[cod]
+*.pyo
+
+# Virtual environment
+.venv/
+env/
+venv/
+
+# Database and data files
+data/*.db
+*.sqlite3
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python egg metadata
+*.egg-info/
+
+# VS Code
+.vscode/
+
+# Environment variables
 .env
-*.ipynb
+
+# Logs
+*.log
+
+# Jupyter notebooks checkpoints
+.ipynb_checkpoints/
