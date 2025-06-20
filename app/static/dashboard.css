@@ -1,0 +1,202 @@
+body {
+    background: radial-gradient(circle at 70% 20%, #23224c 70%, #121135 100%);
+    font-family: 'Segoe UI', Arial, sans-serif;
+    margin: 0;
+    color: #eee;
+}
+
+.container {
+    display: flex;
+    flex-direction: row;
+    height: 100vh;
+}
+
+.left-panel {
+    width: 400px;
+    background: #191945;
+    padding: 24px 0 0 0;
+    box-shadow: 2px 0 30px #17163470;
+    overflow-y: auto;
+}
+
+.left-panel h2 {
+    color: #fff;
+    margin: 0 0 32px 32px;
+    font-size: 2rem;
+    font-weight: 800;
+}
+
+#props-list {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: 0 16px 16px 16px;
+}
+
+.prop-item {
+    background: #252354;
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 16px;
+    cursor: pointer;
+    transition: box-shadow 0.2s;
+    box-shadow: 0 1px 7px #18153a30;
+}
+
+.prop-item:hover {
+    box-shadow: 0 6px 26px #8d44fd70;
+    background: #2c2861;
+}
+
+.prop-headshot-wrap {
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #141339;
+    border-radius: 50%;
+}
+
+.prop-headshot {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #141339;
+}
+
+.prop-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.prop-name {
+    font-size: 1.12rem;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 4px;
+}
+
+.prop-team {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 1rem;
+    color: #e6e3fc;
+}
+
+.prop-team-logo {
+    width: 20px;
+    height: 20px;
+}
+
+.prop-team-abbr {
+    font-weight: 700;
+    margin-right: 6px;
+}
+
+.prop-type {
+    font-size: 0.95rem;
+    color: #b678f7;
+    background: #29205b;
+    padding: 2px 9px;
+    border-radius: 8px;
+    margin-left: 8px;
+    font-weight: 600;
+}
+
+.prop-odds {
+    font-size: 1.25rem;
+    color: #b678f7;
+    font-weight: 700;
+    margin-left: 16px;
+}
+
+.right-panel {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.matchup-dashboard {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: #23224c;
+    border-radius: 2rem;
+    box-shadow: 0 4px 48px #0f0f20;
+    margin: 2rem auto;
+    padding: 2.5rem;
+    width: 850px;
+    min-height: 420px;
+}
+
+.matchup-content {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+    justify-content: center;
+    margin-bottom: 2rem;
+}
+
+.player-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 33%;
+}
+
+.player-headshot {
+    width: 128px;
+    height: 128px;
+    border-radius: 50%;
+    margin-bottom: 1.3rem;
+    box-shadow: 0 0 32px 7px #8d44fd70;
+    object-fit: cover;
+    background: #151432;
+}
+
+.team-logo {
+    width: 52px;
+    height: 52px;
+    margin-bottom: 0.8rem;
+}
+
+.player-name {
+    font-size: 2.1rem;
+    font-weight: 700;
+    color: #dcc8ff;
+    margin-bottom: 1rem;
+    text-align: center;
+    text-shadow: 0 1px 12px #6b34a4;
+}
+
+.vs-col {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18%;
+}
+
+.vs-text {
+    font-size: 3rem;
+    font-weight: 900;
+    color: #b479ff;
+    filter: drop-shadow(0 0 12px #9069f9);
+}
+
+.prop-details {
+    margin-top: 1rem;
+    font-size: 1.23rem;
+    color: #c0b1e8;
+    display: flex;
+    gap: 2.5rem;
+    justify-content: center;
+}
