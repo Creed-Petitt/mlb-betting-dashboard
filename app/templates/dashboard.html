@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>MLB Prop Dashboard</title>
-    <link href="/static/dashboard.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/dashboard.css">
 </head>
 <body>
 <div class="container">
@@ -12,27 +12,28 @@
         <div id="props-list"></div>
     </div>
     <div class="right-panel">
-        <div id="matchup-dashboard" class="matchup-dashboard">
-            <div class="matchup-content">
-                <div class="player-col">
-                    <img id="batter-headshot" class="player-headshot" src="/static/headshots/default.png" alt="Batter headshot">
-                    <img id="batter-team-logo" class="team-logo" src="" alt="Batter team logo">
+        <div class="matchup-panel">
+            <div class="matchup-title">Player Matchup</div>
+            <div class="matchup-main">
+                <div class="player-card">
+                    <img id="batter-headshot" class="player-headshot" src="/static/headshots/default.png">
+                    <img id="batter-team-logo" class="team-logo" src="">
                     <div id="batter-name" class="player-name"></div>
-                    <div id="batter-stats"></div>
                 </div>
-                <div class="vs-col">
-                    <span class="vs-text">VS</span>
-                </div>
-                <div class="player-col">
-                    <img id="pitcher-headshot" class="player-headshot" src="/static/headshots/default.png" alt="Pitcher headshot">
-                    <img id="pitcher-team-logo" class="team-logo" src="" alt="Pitcher team logo">
+                <div class="vs-text">VS</div>
+                <div class="player-card">
+                    <img id="pitcher-headshot" class="player-headshot" src="/static/headshots/default.png">
+                    <img id="pitcher-team-logo" class="team-logo" src="">
                     <div id="pitcher-name" class="player-name"></div>
-                    <div id="pitcher-stats"></div>
                 </div>
             </div>
+            <div class="stats-row">
+                <div class="stats-card" id="batter-stats"></div>
+                <div class="stats-card" id="pitcher-stats"></div>
+            </div>
             <div class="prop-details">
-                <span id="prop-type" class="prop-type"></span>
-                <span id="prop-odds" class="prop-odds"></span>
+                <span id="prop-type"></span>
+                <span id="prop-odds"></span>
             </div>
         </div>
     </div>

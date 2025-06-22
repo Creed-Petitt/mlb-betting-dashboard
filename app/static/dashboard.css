@@ -3,200 +3,192 @@ body {
     font-family: 'Segoe UI', Arial, sans-serif;
     margin: 0;
     color: #eee;
+    overflow: hidden;
 }
-
 .container {
     display: flex;
-    flex-direction: row;
     height: 100vh;
+    width: 100vw;
 }
-
 .left-panel {
-    width: 400px;
+    width: 380px;
     background: #191945;
     padding: 24px 0 0 0;
     box-shadow: 2px 0 30px #17163470;
     overflow-y: auto;
 }
-
 .left-panel h2 {
     color: #fff;
     margin: 0 0 32px 32px;
     font-size: 2rem;
     font-weight: 800;
 }
-
 #props-list {
     display: flex;
     flex-direction: column;
-    gap: 18px;
-    padding: 0 16px 16px 16px;
+    gap: 16px;
+    padding: 0 12px 16px 16px;
 }
-
 .prop-item {
     background: #252354;
-    border-radius: 18px;
+    border-radius: 14px;
     display: flex;
     align-items: center;
-    gap: 18px;
-    padding: 16px;
-    cursor: pointer;
-    transition: box-shadow 0.2s;
-    box-shadow: 0 1px 7px #18153a30;
+    padding: 10px 18px;
+    font-size: 1.1rem;
+    color: #eee;
+    justify-content: space-between;
 }
-
-.prop-item:hover {
-    box-shadow: 0 6px 26px #8d44fd70;
-    background: #2c2861;
-}
-
-.prop-headshot-wrap {
-    width: 56px;
-    height: 56px;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #141339;
-    border-radius: 50%;
-}
-
-.prop-headshot {
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    object-fit: cover;
-    background: #141339;
-}
-
 .prop-info {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-}
-
-.prop-name {
-    font-size: 1.12rem;
-    font-weight: 700;
-    color: #fff;
-    margin-bottom: 4px;
-}
-
-.prop-team {
     display: flex;
     align-items: center;
-    gap: 7px;
-    font-size: 1rem;
-    color: #e6e3fc;
+    gap: 8px;
 }
-
+.prop-name { font-weight: 700; }
 .prop-team-logo {
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
+    filter: drop-shadow(0 0 1px #000);
+    margin-right: 2px;
 }
-
-.prop-team-abbr {
-    font-weight: 700;
-    margin-right: 6px;
-}
-
+.prop-team-abbr { font-weight: 700; }
 .prop-type {
-    font-size: 0.95rem;
-    color: #b678f7;
     background: #29205b;
-    padding: 2px 9px;
-    border-radius: 8px;
-    margin-left: 8px;
+    color: #b678f7;
+    padding: 2px 8px;
+    border-radius: 7px;
     font-weight: 600;
+    font-size: 0.85rem;
+    margin-left: 8px;
 }
-
 .prop-odds {
-    font-size: 1.25rem;
+    font-size: 1.1rem;
     color: #b678f7;
     font-weight: 700;
-    margin-left: 16px;
+    margin-left: 12px;
 }
-
 .right-panel {
     flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
 }
-
-.matchup-dashboard {
+.matchup-panel {
+    background: linear-gradient(135deg, #252354 70%, #191945 100%);
+    border-radius: 28px;
+    box-shadow: 0 4px 54px #0f0f20, 0 0 60px 10px #8d44fd33;
+    width: 880px;
+    min-height: 560px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    background: #23224c;
-    border-radius: 2rem;
-    box-shadow: 0 4px 48px #0f0f20;
-    margin: 2rem auto;
-    padding: 2.5rem;
-    width: 850px;
-    min-height: 420px;
+    padding: 30px 36px 18px 36px;
 }
-
-.matchup-content {
+.matchup-title {
+    font-size: 2.3rem;
+    font-weight: 900;
+    color: #caa0ff;
+    text-shadow: 0 0 28px #9069f9;
+    margin-bottom: 24px;
+}
+.matchup-main {
     display: flex;
     flex-direction: row;
-    align-items: center;
     width: 100%;
-    justify-content: center;
-    margin-bottom: 2rem;
+    justify-content: space-around;
+    align-items: flex-end;
+    margin-bottom: 20px;
 }
-
-.player-col {
+.player-card {
     display: flex;
     flex-direction: column;
     align-items: center;
-    width: 33%;
+    width: 220px;
 }
-
 .player-headshot {
-    width: 128px;
-    height: 128px;
+    width: 106px;
+    height: 106px;
     border-radius: 50%;
-    margin-bottom: 1.3rem;
-    box-shadow: 0 0 32px 7px #8d44fd70;
+    background: #141339;
     object-fit: cover;
-    background: #151432;
+    box-shadow: 0 0 38px 5px #a680ff77;
+    margin-bottom: 10px;
 }
-
 .team-logo {
-    width: 52px;
-    height: 52px;
-    margin-bottom: 0.8rem;
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 6px #000);
+    margin-bottom: 8px;
 }
-
 .player-name {
-    font-size: 2.1rem;
-    font-weight: 700;
-    color: #dcc8ff;
-    margin-bottom: 1rem;
+    font-size: 2rem;
+    font-weight: 800;
+    color: #faf7ff;
+    margin-bottom: 8px;
+    margin-top: 0px;
     text-align: center;
-    text-shadow: 0 1px 12px #6b34a4;
+    text-shadow: 0 0 12px #a68cfa;
+    max-width: 180px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
-
-.vs-col {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 18%;
-}
-
 .vs-text {
-    font-size: 3rem;
+    font-size: 3.2rem;
     font-weight: 900;
-    color: #b479ff;
-    filter: drop-shadow(0 0 12px #9069f9);
+    color: #b678f7;
+    margin: 0 18px 28px 18px;
+    filter: drop-shadow(0 0 14px #9069f9);
+    user-select: none;
 }
-
-.prop-details {
-    margin-top: 1rem;
-    font-size: 1.23rem;
-    color: #c0b1e8;
+.stats-row {
+    width: 96%;
     display: flex;
-    gap: 2.5rem;
+    flex-direction: row;
+    justify-content: space-between;
+    margin-top: 12px;
+    margin-bottom: 0;
+    gap: 40px;
+}
+.stats-card {
+    background: #191945;
+    border-radius: 16px;
+    box-shadow: 0 0 16px #7f55ec3b;
+    width: 350px;
+    min-height: 110px;
+    padding: 18px 20px 8px 22px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 9px 24px;
+    color: #c7c8ff;
+    font-size: 1.1rem;
+    margin-bottom: 0;
+    margin-top: 0;
+}
+.stats-section-title {
+    grid-column: span 2;
+    font-weight: 700;
+    font-size: 1.12rem;
+    color: #b678f7;
+    border-bottom: 1.5px solid #423a7d;
+    padding-bottom: 2px;
+    margin-bottom: 2px;
+    margin-top: 0;
+    letter-spacing: 0.5px;
+}
+.stat-label { color: #9ca0ee; font-size: 1.01rem;}
+.stat-value { color: #61c0fa; font-size: 1.13rem; font-weight: 800; margin-left: 3px;}
+.prop-details {
+    margin-top: 30px;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #b678f7;
+    text-shadow: 0 0 8px #b678f7aa;
+    display: flex;
+    gap: 2.4rem;
     justify-content: center;
 }
