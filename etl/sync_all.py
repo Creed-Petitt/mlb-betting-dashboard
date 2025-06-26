@@ -62,6 +62,8 @@ def main():
     subprocess.run([sys.executable, 'etl/fetch_props.py'])
     # Step 7: fetch stats
     subprocess.run([sys.executable, 'etl/fetch_stats.py'])
+    # Step 8: fetch current standings
+    subprocess.run([sys.executable, 'etl/fetch_standings.py'])
 
 if __name__ == "__main__":
     main()

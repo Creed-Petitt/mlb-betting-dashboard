@@ -146,7 +146,7 @@ function createPropCard(prop) {
         <div class="odds-section">
             <div class="best-odds">
                 <span style="font-size: 0.75rem; color: #64748b; margin-right: 0.5rem;">Best Odds</span>
-                <span class="odds-value">${prop.odds || 'N/A'}</span>
+                <span class="odds-value">${formatAmericanOdds(prop.odds) || 'N/A'}</span>
                 <span style="font-size: 0.75rem; color: #64748b; margin-left: 0.5rem;">FanDuel</span>
             </div>
         </div>
@@ -174,6 +174,16 @@ function formatPropType(propType) {
         'To Hit A Home Run': 'Home Runs'
     };
     return typeMapping[propType] || propType;
+}
+
+function formatAmericanOdds(odds) {
+    if (!odds || odds === 'N/A') return 'N/A';
+    
+    const numericOdds = parseInt(odds);
+    if (isNaN(numericOdds)) return odds;
+    
+    // If positive, add + sign, if negative, already has - sign
+    return numericOdds > 0 ? `+${numericOdds}` : `${numericOdds}`;
 }
 
 function selectProp(cardElement, prop) {
@@ -251,7 +261,7 @@ function showAnalysisModal(prop) {
         headerProp.textContent = `${propType} - Over ${line}`;
     }
     if (lineBadge) lineBadge.textContent = prop.line || '0.5';
-    if (oddsBadge) oddsBadge.textContent = prop.odds || 'N/A';
+    if (oddsBadge) oddsBadge.textContent = formatAmericanOdds(prop.odds) || 'N/A';
 
     // Try to find player cards with more debugging
     const playerCards = modal.querySelectorAll('.analysis-player-card');
@@ -716,47 +726,266 @@ function hideError() {
     }
 }
 
-// Add navigation functions (placeholder for now)
+let standingsData = null;
+let currentStandingsView = 'divisions';
+
 function switchSection(section) {
-    // Remove active class from all tabs
+    console.log('Switching to section:', section);
+    
+    // Hide all sections
+    const sections = ['props-container', 'standings-container', 'games-container', 'stats-container'];
+    sections.forEach(sectionId => {
+        const element = document.getElementById(sectionId);
+        if (element) element.style.display = 'none';
+    });
+    
+    // Hide filters for non-props sections
+    const filtersSection = document.querySelector('.filters-section');
+    if (filtersSection) {
+        filtersSection.style.display = section === 'props' ? 'block' : 'none';
+    }
+    
+    // Hide props summary bar for non-props sections
+    const propsSummaryBar = document.querySelector('.props-summary-bar');
+    if (propsSummaryBar) {
+        propsSummaryBar.style.display = section === 'props' ? 'flex' : 'none';
+    }
+    
+    // Update nav tabs
     document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
+    const activeTab = document.querySelector(`[onclick="switchSection('${section}')"]`);
+    if (activeTab) activeTab.classList.add('active');
     
-    // Add active class to clicked tab
-    event.target.classList.add('active');
-    
-    // For now, only props section is functional
-    if (section === 'props') {
-        // Reload props data
-        loadInitialData();
-        return;
+    // Show selected section
+    const targetSection = document.getElementById(`${section}-container`);
+    if (targetSection) {
+        targetSection.style.display = 'block';
+        
+        // Load data for the section if needed
+        if (section === 'standings' && !standingsData) {
+            loadStandings();
+        }
     }
-    
-    // Placeholder for other sections
-    const container = document.getElementById('props-container');
-    switch(section) {
-        case 'games':
-            container.innerHTML = `
-                <div class="empty-state">
-                    <h3>Games & Weather</h3>
-                    <p>Coming soon - upcoming games with weather conditions</p>
+}
+
+async function loadStandings() {
+    try {
+        const response = await fetch('/api/standings');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        standingsData = await response.json();
+        renderStandings(currentStandingsView);
+        
+    } catch (error) {
+        console.error('Error loading standings:', error);
+        const standingsContent = document.getElementById('standings-content');
+        if (standingsContent) {
+            standingsContent.innerHTML = `
+                <div class="error-state">
+                    <h3>Error Loading Standings</h3>
+                    <p>Unable to fetch current standings. Please try again later.</p>
                 </div>
             `;
-            break;
-        case 'standings':
-            container.innerHTML = `
-                <div class="empty-state">
-                    <h3>Current Standings</h3>
-                    <p>Coming soon - real-time MLB standings</p>
-                </div>
-            `;
-            break;
-        case 'stats':
-            container.innerHTML = `
-                <div class="empty-state">
-                    <h3>Stat Leaders</h3>
-                    <p>Coming soon - customizable stat leaderboards</p>
-                </div>
-            `;
-            break;
+        }
     }
+}
+
+function showStandingsView(view) {
+    currentStandingsView = view;
+    
+    // Update toggle buttons
+    document.querySelectorAll('.toggle-btn').forEach(btn => btn.classList.remove('active'));
+    const activeBtn = document.querySelector(`[onclick="showStandingsView('${view}')"]`);
+    if (activeBtn) activeBtn.classList.add('active');
+    
+    if (standingsData) {
+        renderStandings(view);
+    }
+}
+
+function renderStandings(view) {
+    const container = document.getElementById('standings-content');
+    if (!container || !standingsData) return;
+    
+    if (view === 'divisions') {
+        renderDivisionStandings(container);
+    } else {
+        renderPlayoffPicture(container);
+    }
+}
+
+function renderDivisionStandings(container) {
+    const divisions = standingsData.divisions;
+    
+    let html = '<div class="standings-grid">';
+    
+    // Define the order of divisions for consistent layout
+    const divisionOrder = ['AL East', 'AL Central', 'AL West', 'NL East', 'NL Central', 'NL West'];
+    
+    divisionOrder.forEach(divisionName => {
+        if (divisions[divisionName]) {
+            const teams = divisions[divisionName];
+            html += `
+                <div class="division-table">
+                    <div class="division-header">${divisionName}</div>
+                    <table class="standings-table">
+                        <thead>
+                            <tr>
+                                <th>Team</th>
+                                <th>W-L</th>
+                                <th>PCT</th>
+                                <th>GB</th>
+                                <th>Streak</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            teams.forEach((team, index) => {
+                const rowClass = index === 0 ? 'division-leader' : '';
+                const streakClass = team.streak.startsWith('W') ? 'streak-win' : 'streak-loss';
+                
+                html += `
+                    <tr class="${rowClass}">
+                        <td>
+                            <div class="team-cell">
+                                <img class="standings-team-logo" 
+                                     src="/static/team_logos/${team.team_id}.svg" 
+                                     alt="${team.abbr}"
+                                     onerror="this.style.display='none'">
+                                <div class="team-info">
+                                    <div class="team-abbr-large">${team.abbr}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="record-cell">${team.wins}-${team.losses}</td>
+                        <td class="pct-cell">${team.pct.toFixed(3)}</td>
+                        <td class="gb-cell">${team.gb === 0 ? '-' : team.gb}</td>
+                        <td class="streak-cell ${streakClass}">${team.streak}</td>
+                    </tr>
+                `;
+            });
+            
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+    });
+    
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function renderPlayoffPicture(container) {
+    const playoffs = standingsData.playoffs;
+    
+    let html = '<div class="playoff-grid">';
+    
+    ['AL', 'NL'].forEach(league => {
+        const leagueData = playoffs[league];
+        const leagueName = league === 'AL' ? 'American League' : 'National League';
+        
+        html += `
+            <div class="playoff-section">
+                <div class="playoff-section-header">${leagueName}</div>
+                
+                <!-- Division Leaders -->
+                <div class="playoff-category">
+                    <div class="playoff-category-header clinched">Division Leaders</div>
+        `;
+        
+        if (leagueData.division_leaders && leagueData.division_leaders.length > 0) {
+            leagueData.division_leaders.forEach(team => {
+                html += `
+                    <div class="compact-team-row">
+                        <div class="compact-team-info">
+                            <img class="compact-team-logo" 
+                                 src="/static/team_logos/${team.team_id}.svg" 
+                                 alt="${team.abbr}"
+                                 onerror="this.style.display='none'">
+                            <span class="compact-team-name">${team.abbr}</span>
+                        </div>
+                        <div class="compact-team-stats">
+                            <span class="compact-record">${team.wins}-${team.losses}</span>
+                            <span class="compact-pct">${team.pct.toFixed(3)}</span>
+                        </div>
+                    </div>
+                `;
+            });
+        } else {
+            html += '<div class="compact-team-row"><span class="compact-team-name">No data available</span></div>';
+        }
+        
+        html += `
+                </div>
+                
+                <!-- Wild Card Teams -->
+                <div class="playoff-category">
+                    <div class="playoff-category-header wildcard">Wild Card</div>
+        `;
+        
+        if (leagueData.wild_cards && leagueData.wild_cards.length > 0) {
+            leagueData.wild_cards.forEach(team => {
+                html += `
+                    <div class="compact-team-row">
+                        <div class="compact-team-info">
+                            <img class="compact-team-logo" 
+                                 src="/static/team_logos/${team.team_id}.svg" 
+                                 alt="${team.abbr}"
+                                 onerror="this.style.display='none'">
+                            <span class="compact-team-name">${team.abbr}</span>
+                        </div>
+                        <div class="compact-team-stats">
+                            <span class="compact-record">${team.wins}-${team.losses}</span>
+                            <span class="compact-pct">${team.pct.toFixed(3)}</span>
+                        </div>
+                    </div>
+                `;
+            });
+        } else {
+            html += '<div class="compact-team-row"><span class="compact-team-name">No wild card teams</span></div>';
+        }
+        
+        html += `
+                </div>
+                
+                <!-- In the Hunt -->
+                <div class="playoff-category">
+                    <div class="playoff-category-header in-hunt">In the Hunt</div>
+        `;
+        
+        if (leagueData.in_hunt && leagueData.in_hunt.length > 0) {
+            leagueData.in_hunt.forEach(team => {
+                html += `
+                    <div class="compact-team-row">
+                        <div class="compact-team-info">
+                            <img class="compact-team-logo" 
+                                 src="/static/team_logos/${team.team_id}.svg" 
+                                 alt="${team.abbr}"
+                                 onerror="this.style.display='none'">
+                            <span class="compact-team-name">${team.abbr}</span>
+                        </div>
+                        <div class="compact-team-stats">
+                            <span class="compact-record">${team.wins}-${team.losses}</span>
+                            <span class="compact-pct">${team.pct.toFixed(3)}</span>
+                        </div>
+                    </div>
+                `;
+            });
+        } else {
+            html += '<div class="compact-team-row"><span class="compact-team-name">No teams in hunt</span></div>';
+        }
+        
+        html += `
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    container.innerHTML = html;
 } 

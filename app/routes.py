@@ -276,7 +276,7 @@ def get_players():
             espn_id = get_espn_id_from_map(player.id)
             
             # Get some basic season stats
-            season_stats = get_player_stats(player.id, season="2024")
+            season_stats = get_player_stats(player.id, season="2025")
             
             results.append({
                 "id": player.id,
@@ -365,6 +365,118 @@ def get_games():
     except Exception as e:
         current_app.logger.error(f"Error fetching games: {e}")
         return jsonify({"error": "Failed to fetch games"}), 500
+
+@bp.route('/api/standings')
+@log_api_call
+@handle_database_error
+def get_standings():
+    """Return current MLB standings from database."""
+    try:
+        from sqlalchemy import text
+        from datetime import date
+        
+        # Get the most recent standings data
+        query = text("""
+            SELECT team_id, team_name, team_abbr, division, league,
+                   wins, losses, winning_pct, games_behind, streak,
+                   division_rank, league_rank, wildcard_rank
+            FROM standings 
+            WHERE last_updated = (SELECT MAX(last_updated) FROM standings)
+            ORDER BY league, division, division_rank
+        """)
+        
+        result = db.session.execute(query)
+        rows = result.fetchall()
+        
+        if not rows:
+            return jsonify({"error": "No standings data available"}), 404
+        
+        # Organize data by division
+        standings = {"divisions": {}}
+        
+        division_map = {
+            "American League East": "AL East",
+            "American League Central": "AL Central", 
+            "American League West": "AL West",
+            "National League East": "NL East",
+            "National League Central": "NL Central",
+            "National League West": "NL West"
+        }
+        
+        for row in rows:
+            division_key = division_map.get(row.division, row.division)
+            
+            if division_key not in standings["divisions"]:
+                standings["divisions"][division_key] = []
+            
+            team_data = {
+                "team": row.team_name,
+                "abbr": row.team_abbr,
+                "team_id": row.team_id,
+                "wins": row.wins,
+                "losses": row.losses,
+                "pct": round(row.winning_pct, 3),
+                "gb": row.games_behind if row.games_behind > 0 else 0.0,
+                "streak": row.streak or "W1"
+            }
+            
+            standings["divisions"][division_key].append(team_data)
+        
+        # Calculate playoff picture for league view
+        al_teams = []
+        nl_teams = []
+        
+        for division_name, teams in standings["divisions"].items():
+            if division_name.startswith("AL"):
+                al_teams.extend(teams)
+            else:
+                nl_teams.extend(teams)
+        
+        # Sort by winning percentage
+        al_teams.sort(key=lambda x: x["pct"], reverse=True)
+        nl_teams.sort(key=lambda x: x["pct"], reverse=True)
+        
+        # Get division leaders (already first in each division due to division_rank sorting)
+        al_division_leaders = []
+        nl_division_leaders = []
+        
+        for div in ["AL East", "AL Central", "AL West"]:
+            if div in standings["divisions"] and standings["divisions"][div]:
+                al_division_leaders.append(standings["divisions"][div][0])
+        
+        for div in ["NL East", "NL Central", "NL West"]:
+            if div in standings["divisions"] and standings["divisions"][div]:
+                nl_division_leaders.append(standings["divisions"][div][0])
+        
+        # Get wild card teams (non-division leaders sorted by record)
+        al_wildcard_candidates = [team for team in al_teams if team not in al_division_leaders]
+        nl_wildcard_candidates = [team for team in nl_teams if team not in nl_division_leaders]
+        
+        al_wildcards = al_wildcard_candidates[:3]
+        nl_wildcards = nl_wildcard_candidates[:3]
+        
+        # Get "in the hunt" teams (next 3 best records)
+        al_in_hunt = al_wildcard_candidates[3:6]
+        nl_in_hunt = nl_wildcard_candidates[3:6]
+        
+        standings["playoffs"] = {
+            "AL": {
+                "division_leaders": al_division_leaders,
+                "wild_cards": al_wildcards,
+                "in_hunt": al_in_hunt
+            },
+            "NL": {
+                "division_leaders": nl_division_leaders,
+                "wild_cards": nl_wildcards,
+                "in_hunt": nl_in_hunt
+            }
+        }
+        
+        return jsonify(standings)
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching standings: {e}")
+        return jsonify({"error": "Failed to fetch standings"}), 500
 
 @bp.route('/api/stats/summary')
 def get_stats_summary():
