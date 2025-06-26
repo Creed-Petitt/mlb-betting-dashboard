@@ -28,6 +28,7 @@ class Config:
     SESSION_COOKIE_SECURE = os.environ.get('SESSION_COOKIE_SECURE', 'False').lower() == 'true'
     SESSION_COOKIE_HTTPONLY = os.environ.get('SESSION_COOKIE_HTTPONLY', 'True').lower() == 'true'
     SESSION_COOKIE_SAMESITE = os.environ.get('SESSION_COOKIE_SAMESITE', 'Lax')
+    PERMANENT_SESSION_LIFETIME = int(os.environ.get('PERMANENT_SESSION_LIFETIME', 86400))  # 24 hours
     
     # Input Validation Limits
     MAX_INT_VALUE = int(os.environ.get('MAX_INT_VALUE', 2147483647))
@@ -40,6 +41,8 @@ class Config:
     # Logging Configuration
     LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
     LOG_FILE = os.environ.get('LOG_FILE', 'logs/app.log')
+    LOG_MAX_BYTES = int(os.environ.get('LOG_MAX_BYTES', 10485760))  # 10MB
+    LOG_BACKUP_COUNT = int(os.environ.get('LOG_BACKUP_COUNT', 5))
     
     # Pagination Defaults
     DEFAULT_PAGE_SIZE = int(os.environ.get('DEFAULT_PAGE_SIZE', 50))
@@ -50,25 +53,41 @@ class Config:
     
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE = int(os.environ.get('RATE_LIMIT_PER_MINUTE', 60))
+    
+    # Rate Limiting Configuration
+    RATELIMIT_STORAGE_URL = os.environ.get('RATELIMIT_STORAGE_URL', 'memory://')  # In-memory for development
+    RATELIMIT_DEFAULT = os.environ.get('RATELIMIT_DEFAULT', '200 per hour, 50 per minute')
+    RATELIMIT_HEADERS_ENABLED = os.environ.get('RATELIMIT_HEADERS_ENABLED', 'True').lower() == 'true'
 
 class DevelopmentConfig(Config):
     """Development configuration."""
     DEBUG = True
     FLASK_ENV = 'development'
+    TESTING = False
+    SESSION_COOKIE_SECURE = False  # Allow HTTP in development
+    
+    # More lenient rate limits for development
+    RATELIMIT_DEFAULT = '1000 per hour, 200 per minute'
 
 class ProductionConfig(Config):
     """Production configuration."""
     DEBUG = False
     FLASK_ENV = 'production'
-    # Override with more secure defaults for production
-    SESSION_COOKIE_SECURE = True
-    # Keep using SQLite but with the same path
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or f'sqlite:///{os.path.abspath("data/mlb.db")}'
+    TESTING = False
+    SESSION_COOKIE_SECURE = True  # HTTPS only in production
+    
+    # Stricter rate limits for production
+    RATELIMIT_DEFAULT = '100 per hour, 20 per minute'
+    RATELIMIT_STORAGE_URL = os.environ.get('RATELIMIT_STORAGE_URL', 'redis://localhost:6379')
 
 class TestingConfig(Config):
     """Testing configuration."""
+    DEBUG = True
     TESTING = True
     SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
+    
+    # Disable rate limiting for tests
+    RATELIMIT_ENABLED = False
 
 # Configuration dictionary
 config = {

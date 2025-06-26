@@ -4,9 +4,55 @@ import os
 import logging
 import functools
 import re
+import json
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, Union
-from flask import current_app, request, jsonify
+from flask import current_app, request, jsonify, g
+
+# Enhanced structured logging
+class StructuredLogger:
+    """Structured logger that outputs JSON for better parsing and analysis."""
+    
+    def __init__(self, logger_name: str):
+        self.logger = logging.getLogger(logger_name)
+    
+    def _log_structured(self, level: int, message: str, **kwargs):
+        """Log a structured message with additional context."""
+        log_data = {
+            'timestamp': datetime.utcnow().isoformat(),
+            'message': message,
+            'level': logging.getLevelName(level),
+            **kwargs
+        }
+        
+        # Add request context if available
+        if request:
+            log_data.update({
+                'request_id': getattr(g, 'request_id', None),
+                'method': request.method,
+                'path': request.path,
+                'remote_addr': request.remote_addr,
+                'user_agent': request.headers.get('User-Agent', '')[:100]  # Truncate long user agents
+            })
+        
+        self.logger.log(level, json.dumps(log_data, default=str))
+    
+    def info(self, message: str, **kwargs):
+        self._log_structured(logging.INFO, message, **kwargs)
+    
+    def error(self, message: str, **kwargs):
+        self._log_structured(logging.ERROR, message, **kwargs)
+    
+    def warning(self, message: str, **kwargs):
+        self._log_structured(logging.WARNING, message, **kwargs)
+    
+    def debug(self, message: str, **kwargs):
+        self._log_structured(logging.DEBUG, message, **kwargs)
+
+# Create structured logger instances
+security_logger = StructuredLogger('security')
+performance_logger = StructuredLogger('performance')
+api_logger = StructuredLogger('api')
 
 def validate_integer_input(value: Any, min_val: Optional[int] = None, max_val: Optional[int] = None, field_name: str = "value") -> int:
     """Validate and sanitize integer input to prevent injection attacks."""
@@ -16,49 +62,63 @@ def validate_integer_input(value: Any, min_val: Optional[int] = None, max_val: O
         
         # Check bounds
         if min_val is not None and int_value < min_val:
+            security_logger.warning(f"Integer validation failed: {field_name} below minimum", 
+                                  field=field_name, value=int_value, min_val=min_val)
             raise ValueError(f"{field_name} must be at least {min_val}")
         
         max_allowed = max_val or current_app.config.get('MAX_INT_VALUE', 2147483647)
         if int_value > max_allowed:
-            raise ValueError(f"{field_name} must be no more than {max_allowed}")
-            
+            security_logger.warning(f"Integer validation failed: {field_name} above maximum", 
+                                  field=field_name, value=int_value, max_val=max_allowed)
+            raise ValueError(f"{field_name} must be at most {max_allowed}")
+        
         return int_value
     except (ValueError, TypeError) as e:
-        current_app.logger.warning(f"Invalid integer input for {field_name}: {value}")
+        security_logger.error(f"Integer validation error for {field_name}", 
+                            field=field_name, value=str(value), error=str(e))
         raise ValueError(f"Invalid {field_name}: must be a valid integer")
 
 def validate_string_input(value: Any, max_length: Optional[int] = None, field_name: str = "value", allow_empty: bool = True) -> str:
     """Validate and sanitize string input to prevent injection attacks."""
-    if value is None:
-        if allow_empty:
-            return ""
-        raise ValueError(f"{field_name} cannot be empty")
-    
-    # Convert to string
-    str_value = str(value)
-    
-    # Check for basic SQL injection patterns
-    dangerous_patterns = [
-        r"(?i)(union\s+select)",
-        r"(?i)(drop\s+table)",
-        r"(?i)(delete\s+from)",
-        r"(?i)(insert\s+into)",
-        r"(?i)(update\s+\w+\s+set)",
-        r"(?i)(<script)",
-        r"(?i)(javascript:)"
-    ]
-    
-    for pattern in dangerous_patterns:
-        if re.search(pattern, str_value):
-            current_app.logger.warning(f"Potentially dangerous input detected in {field_name}: {str_value[:100]}")
-            raise ValueError(f"Invalid {field_name}: contains prohibited content")
-    
-    # Check length
-    max_allowed = max_length or current_app.config.get('MAX_STRING_LENGTH', 1000)
-    if len(str_value) > max_allowed:
-        raise ValueError(f"{field_name} must be no more than {max_allowed} characters")
-    
-    return str_value.strip()
+    try:
+        if value is None:
+            if allow_empty:
+                return ""
+            raise ValueError(f"{field_name} cannot be empty")
+        
+        # Convert to string
+        str_value = str(value).strip()
+        
+        # Check if empty when not allowed
+        if not allow_empty and not str_value:
+            raise ValueError(f"{field_name} cannot be empty")
+        
+        # Check length
+        max_len = max_length or current_app.config.get('MAX_STRING_LENGTH', 1000)
+        if len(str_value) > max_len:
+            security_logger.warning(f"String validation failed: {field_name} too long", 
+                                  field=field_name, length=len(str_value), max_length=max_len)
+            raise ValueError(f"{field_name} must be at most {max_len} characters")
+        
+        # Basic SQL injection pattern detection
+        dangerous_patterns = [
+            r"(\\'|\\\"|\\'\\\")",  # Quote escaping
+            r"(;|\s+(or|and)\s+)",  # SQL keywords
+            r"(union\s+select|drop\s+table|delete\s+from)",  # SQL operations
+            r"(<script|javascript:|on\w+\s*=)",  # XSS patterns
+        ]
+        
+        for pattern in dangerous_patterns:
+            if re.search(pattern, str_value, re.IGNORECASE):
+                security_logger.error(f"Dangerous pattern detected in {field_name}", 
+                                    field=field_name, pattern=pattern, value=str_value[:100])
+                raise ValueError(f"Invalid {field_name}: contains potentially dangerous content")
+        
+        return str_value
+    except (ValueError, TypeError) as e:
+        security_logger.error(f"String validation error for {field_name}", 
+                            field=field_name, value=str(value)[:100] if value else None, error=str(e))
+        raise ValueError(f"Invalid {field_name}: {str(e)}")
 
 def validate_request_args():
     """Decorator to validate common request arguments for security."""
@@ -86,51 +146,74 @@ def validate_request_args():
                     g.validated_page = page
                 
                 return func(*args, **kwargs)
+                
             except ValueError as e:
-                current_app.logger.warning(f"Input validation failed for {request.endpoint}: {str(e)}")
+                security_logger.warning(f"Request validation failed in {func.__name__}", 
+                                      error=str(e),
+                                      request_args=dict(request.args))
                 return jsonify({"error": str(e)}), 400
+        
         return wrapper
     return decorator
 
 def log_api_call(func):
-    """Decorator to log API calls and their performance."""
+    """Enhanced decorator to log API calls with performance metrics and security context."""
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        start_time = datetime.now()
-        endpoint = request.endpoint or 'unknown'
-        method = request.method
-        client_ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr)
+        start_time = datetime.utcnow()
         
         try:
             result = func(*args, **kwargs)
-            duration = (datetime.now() - start_time).total_seconds()
-            current_app.logger.info(
-                f"API Call: {method} {endpoint} - Success - Duration: {duration:.3f}s - IP: {client_ip}"
-            )
+            duration = (datetime.utcnow() - start_time).total_seconds()
+            
+            # Log successful API call
+            api_logger.info(f"API Call: {request.method} {func.__name__}", 
+                          duration=round(duration, 3),
+                          status="success",
+                          args_count=len(args),
+                          kwargs_count=len(kwargs))
+            
+            # Log performance warning if slow
+            if duration > 1.0:  # More than 1 second
+                performance_logger.warning(f"Slow API call detected", 
+                                         endpoint=func.__name__,
+                                         duration=round(duration, 3))
+            
             return result
+            
         except Exception as e:
-            duration = (datetime.now() - start_time).total_seconds()
-            current_app.logger.error(
-                f"API Call: {method} {endpoint} - Error: {str(e)} - Duration: {duration:.3f}s - IP: {client_ip}"
-            )
+            duration = (datetime.utcnow() - start_time).total_seconds()
+            
+            # Log API error
+            api_logger.error(f"API Call failed: {request.method} {func.__name__}", 
+                           duration=round(duration, 3),
+                           status="error",
+                           error_type=type(e).__name__,
+                           error_message=str(e))
             raise
+    
     return wrapper
 
 def handle_database_error(func):
-    """Decorator to handle database errors gracefully."""
+    """Enhanced decorator to handle database errors with proper logging."""
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            current_app.logger.error(f"Database error in {func.__name__}: {str(e)}")
-            # Close the session to prevent issues
-            from .models import db
-            try:
-                db.session.rollback()
-            except:
-                pass
-            return jsonify({"error": "Database error occurred"}), 500
+            # Log database error with context
+            from sqlalchemy.exc import SQLAlchemyError
+            
+            if isinstance(e, SQLAlchemyError):
+                security_logger.error(f"Database error in {func.__name__}", 
+                                    error_type=type(e).__name__,
+                                    error_message=str(e),
+                                    function=func.__name__)
+                return jsonify({"error": "Database error occurred"}), 500
+            else:
+                # Re-raise non-database errors
+                raise
+    
     return wrapper
 
 def validate_pagination_params(page: Optional[int] = None, per_page: Optional[int] = None) -> Dict[str, int]:
@@ -180,34 +263,45 @@ def get_date_range(days_ahead: int = 2) -> tuple:
     return today, end_date
 
 def health_check() -> Dict[str, Any]:
-    """Perform application health check."""
+    """Perform application health check with structured logging."""
     try:
         from .models import db, Prop, Player, Team
+        
+        start_time = datetime.utcnow()
         
         # Check database connectivity
         prop_count = Prop.query.count()
         player_count = Player.query.count()
         team_count = Team.query.count()
         
-        return {
+        duration = (datetime.utcnow() - start_time).total_seconds()
+        
+        health_data = {
             "status": "healthy",
             "timestamp": datetime.utcnow().isoformat(),
             "database": {
                 "connected": True,
                 "props": prop_count,
                 "players": player_count,
-                "teams": team_count
+                "teams": team_count,
+                "query_time": round(duration, 3)
             },
             "version": "1.0.0"
         }
+        
+        performance_logger.info("Health check completed", **health_data)
+        return health_data
+        
     except Exception as e:
-        current_app.logger.error(f"Health check failed: {str(e)}")
-        return {
+        error_data = {
             "status": "unhealthy",
             "timestamp": datetime.utcnow().isoformat(),
             "error": str(e),
             "database": {"connected": False}
         }
+        
+        security_logger.error("Health check failed", **error_data)
+        return error_data
 
 def create_logs_directory():
     """Ensure logs directory exists."""
@@ -261,3 +355,14 @@ def setup_error_handlers(app):
         except:
             pass
         return jsonify({"error": "An unexpected error occurred"}), 500 
+
+def rate_limit_handler(e):
+    """Custom rate limit handler with structured logging."""
+    security_logger.warning("Rate limit exceeded", 
+                          limit=str(e.limit),
+                          retry_after=e.retry_after)
+    return jsonify({
+        "error": "Rate limit exceeded",
+        "message": f"Too many requests. Try again in {e.retry_after} seconds.",
+        "retry_after": e.retry_after
+    }), 429 

@@ -88,11 +88,14 @@ def get_props():
             field_name="per_page"
         )
         
-        # ONLY today's props - nothing else
+        # Show props for today and tomorrow (upcoming games)
         today = date.today()
+        tomorrow = today + timedelta(days=1)
         
-        # Base query for TODAY ONLY
-        props_query = Prop.query.filter(Prop.date == today).order_by(Prop.odds.desc())
+        # Base query for TODAY and TOMORROW
+        props_query = Prop.query.filter(
+            (Prop.date == today) | (Prop.date == tomorrow)
+        ).order_by(Prop.date.asc(), Prop.odds.desc())
         
         # Add team filter if specified
         if team_id:

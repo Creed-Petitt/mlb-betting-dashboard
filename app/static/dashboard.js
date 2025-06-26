@@ -51,11 +51,13 @@ async function loadTeams() {
 
 async function loadProps() {
     try {
-        const response = await fetch('/api/props?per_page=500');
+        const response = await fetch('/api/props?per_page=1000');
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
+        
+        console.log(`API returned ${data.results.length} props, total available: ${data.total}`);
         
         // Deduplicate props - keep only the most recent prop per player
         const propsMap = new Map();
@@ -67,6 +69,7 @@ async function loadProps() {
         });
         
         propsData = Array.from(propsMap.values());
+        console.log(`After deduplication: ${propsData.length} unique props`);
         window.propsData = propsData; // For backward compatibility
         
     } catch (error) {
@@ -105,8 +108,15 @@ function createPropCard(prop) {
     card.className = 'prop-card';
     card.dataset.propId = prop.prop_id;
     
-    // For "To Record A Hit" props, the line is typically 0.5
-    const displayLine = prop.prop_type === 'To Record A Hit' ? '0.5' : (prop.line || 'N/A');
+    // Set appropriate lines for different prop types
+    let displayLine;
+    if (prop.prop_type === 'To Record A Hit' || prop.prop_type === 'To Record An RBI' || prop.prop_type === 'To Hit A Home Run') {
+        displayLine = '0.5'; // Yes/No props
+    } else if (prop.prop_type === 'To Record 2+ RBIs') {
+        displayLine = '1.5'; // 2+ RBIs
+    } else {
+        displayLine = prop.line || 'N/A';
+    }
     
     card.innerHTML = `
         <div class="prop-header">
@@ -159,8 +169,9 @@ function createPropCard(prop) {
 function formatPropType(propType) {
     const typeMapping = {
         'To Record A Hit': 'Total Hits',
-        'To Record A HR': 'Home Runs',
-        'To Record An RBI': 'RBIs'
+        'To Record An RBI': 'RBI (1+)',
+        'To Record 2+ RBIs': 'RBI (2+)',
+        'To Hit A Home Run': 'Home Runs'
     };
     return typeMapping[propType] || propType;
 }
@@ -638,16 +649,28 @@ function initializeFilters() {
     
     // Add filter event listeners
     teamSelect.addEventListener('change', applyFilters);
+    
+    // Add prop type filter listener
+    const propTypeSelect = document.getElementById('prop-type-filter');
+    if (propTypeSelect) {
+        propTypeSelect.addEventListener('change', applyFilters);
+    }
 }
 
 function applyFilters() {
     const teamFilter = document.getElementById('team-filter').value;
+    const propTypeFilter = document.getElementById('prop-type-filter').value;
     
     let filteredProps = propsData;
     
     // Apply team filter
     if (teamFilter) {
         filteredProps = filteredProps.filter(prop => prop.player_team_abbr === teamFilter);
+    }
+    
+    // Apply prop type filter
+    if (propTypeFilter) {
+        filteredProps = filteredProps.filter(prop => prop.prop_type === propTypeFilter);
     }
     
     renderProps(filteredProps);

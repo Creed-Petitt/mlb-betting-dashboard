@@ -3,14 +3,15 @@ __pycache__/
 *.py[cod]
 *.pyo
 
-# Virtual environment
+# Virtual environments
 .venv/
 env/
 venv/
 
 # Database and data files
 data/*.db
-*.sqlite3
+data/*.sqlite3
+data/*.backup*
 
 # OS files
 .DS_Store
@@ -19,16 +20,19 @@ Thumbs.db
 # Python egg metadata
 *.egg-info/
 
-# VS Code
+# VS Code and editor settings
 .vscode/
+.idea/
 
 # Environment variables
 .env
 
 # Logs
+logs/
 *.log
 
 # Jupyter notebooks checkpoints
 .ipynb_checkpoints/
 
-congig.py
+# Security documentation (do not commit)
+SECURITY_ENHANCEMENTS.md

@@ -105,37 +105,45 @@ def pull_fanduel_props():
     print(f"[DEBUG] competition_id_to_date sample: {list(competition_id_to_date.items())[:5]}")
 
     new_props = 0
-
-    hit_markets_found = 0
+    
+    # Target prop market types
+    target_markets = {
+        "PLAYER_TO_RECORD_A_HIT": "Hits",
+        "TO_RECORD_AN_RBI": "RBI", 
+        "TO_RECORD_2+_RBIS": "RBI",
+        "TO_HIT_A_HOME_RUN": "Home Runs"
+    }
+    
+    print(f"🎯 Targeting {len(target_markets)} prop market types:")
+    for market_type, category in target_markets.items():
+        print(f"   📈 {market_type} → {category}")
+    
+    markets_found = {market_type: 0 for market_type in target_markets}
+    
     for m in markets.values():
         market_type = m.get("marketType")
         prop_type = m.get("marketName")
         event_id = str(m.get("eventId", ""))
         competition_id = str(m.get("competitionId", ""))
 
-        # Only use PLAYER_TO_RECORD_A_HIT for now
-        if market_type != "PLAYER_TO_RECORD_A_HIT":
+        # Only process our target market types
+        if market_type not in target_markets:
             continue
             
-        hit_markets_found += 1
-        print(f"[DEBUG] Found PLAYER_TO_RECORD_A_HIT market #{hit_markets_found}: event_id={event_id}, prop_type={prop_type}")
+        markets_found[market_type] += 1
+        category = target_markets[market_type]
+        print(f"✅ Found {category} market: {market_type} #{markets_found[market_type]} → '{prop_type}'")
 
-        # Prefer event date, fallback to competition date
+        # Get game date
         game_date = event_id_to_date.get(event_id)
         if not game_date:
             game_date = competition_id_to_date.get(competition_id)
-
-        # If no game_date found, be more permissive and include the prop anyway
-        # This helps capture props that might have date parsing issues
         if not game_date:
-            # Use today's date as fallback for props without clear dates
-            game_date = date.today()
-            print(f"[DEBUG] No game_date found for market event_id {event_id}, competition_id {competition_id}, using today's date as fallback")
-        else:
-            print(f"[DEBUG] Using game_date {game_date} for event_id {event_id}")
+            game_date = date.today()  # fallback
+            print(f"[DEBUG] No game_date found, using today as fallback")
 
         runners = m.get("runners", [])
-        print(f"[DEBUG] Processing {len(runners)} runners for event_id {event_id}")
+        print(f"📝 Processing {len(runners)} runners for {market_type}")
         
         for runner in runners:
             fanduel_name = runner.get("runnerName", "")
@@ -143,7 +151,6 @@ def pull_fanduel_props():
             odds = runner.get("winRunnerOdds", {}).get("americanDisplayOdds", {}).get("americanOdds")
             
             if not fanduel_name:
-                print(f"[DEBUG] Skipping runner with no name")
                 continue
                 
             norm_name = normalize_name(fanduel_name)
@@ -155,117 +162,10 @@ def pull_fanduel_props():
                         player = db_player
                         break
             if not player:
-                print(f"[NO MATCH] {fanduel_name} (normalized: '{norm_name}')")
+                print(f"❌ [NO MATCH] {fanduel_name} (normalized: '{norm_name}')")
                 continue
 
-            print(f"[DEBUG] Found player: {fanduel_name} -> {player.name} (ID: {player.id})")
-
-            exists = (
-                db.session.query(Prop)
-                .filter_by(date=game_date, player_id=player.id, event_id=event_id, prop_type=prop_type)
-                .first()
-            )
-            if not exists:
-                print(f"[DEBUG] Adding prop: {fanduel_name}, date={game_date}, event_id={event_id}, odds={odds}")
-                db.session.add(Prop(
-                    date=game_date,
-                    player_id=player.id,
-                    event_id=event_id,
-                    prop_type=prop_type,
-                    line=line,
-                    odds=odds
-                ))
-                new_props += 1
-            else:
-                print(f"[DEBUG] Prop already exists for {fanduel_name}")
-
-    db.session.commit()
-    print(f"\nAdded {new_props} props.")
-
-
-    name_map = get_player_name_map()
-    print(f"[DEBUG] Loaded {len(name_map)} player names from DB")
-
-    new_props = 0
-    seen_market_types = set()
-
-    for m in markets.values():
-        market_type = m.get("marketType")
-        prop_type = m.get("marketName")
-        event_id = str(m.get("eventId", ""))
-        seen_market_types.add(market_type)
-        if market_type != "PLAYER_TO_RECORD_A_HIT":
-            continue
-        game_date = event_id_to_date.get(event_id)
-        if not game_date:
-            print(f"[DEBUG] No game_date found for event_id {event_id}")
-            continue
-
-        for runner in m.get("runners", []):
-            fanduel_name = runner.get("runnerName", "")
-            line = runner.get("handicap")
-            odds = runner.get("winRunnerOdds", {}).get("americanDisplayOdds", {}).get("americanOdds")
-            norm_name = normalize_name(fanduel_name)
-            player = name_map.get(norm_name)
-            if not player:
-                # Fuzzy match fallback
-                for db_name, db_player in name_map.items():
-                    if norm_name in db_name or db_name in norm_name:
-                        player = db_player
-                        break
-            if not player:
-                print(f"[NO MATCH] {fanduel_name} (normalized: '{norm_name}')")
-                continue
-
-            exists = (
-                db.session.query(Prop)
-                .filter_by(date=game_date, player_id=player.id, event_id=event_id, prop_type=prop_type)
-                .first()
-            )
-            if not exists:
-                print(f"[DEBUG] Adding prop: {fanduel_name}, date={game_date}, event_id={event_id}, odds={odds}")
-                db.session.add(Prop(
-                    date=game_date,
-                    player_id=player.id,
-                    event_id=event_id,
-                    prop_type=prop_type,
-                    line=line,
-                    odds=odds
-                ))
-                new_props += 1
-
-    db.session.commit()
-    print(f"Added {new_props} props.")
-    print(f"[DEBUG] Market types seen: {seen_market_types}")
-
-    name_map = get_player_name_map()
-    new_props = 0
-    for m in markets.values():
-        market_type = m.get("marketType")
-        prop_type = m.get("marketName")
-        event_id = str(m.get("eventId", ""))
-        if market_type != "PLAYER_TO_RECORD_A_HIT":
-            continue
-        game_date = event_id_to_date.get(event_id)
-        if not game_date:
-            continue  # Skip if we can't determine the correct date
-
-        for runner in m.get("runners", []):
-            fanduel_name = runner.get("runnerName", "")
-            line = runner.get("handicap")
-            odds = runner.get("winRunnerOdds", {}).get("americanDisplayOdds", {}).get("americanOdds")
-            norm_name = normalize_name(fanduel_name)
-            player = name_map.get(norm_name)
-            if not player:
-                # Fuzzy match fallback
-                for db_name, db_player in name_map.items():
-                    if norm_name in db_name or db_name in norm_name:
-                        player = db_player
-                        break
-            if not player:
-                print(f"NO MATCH: {fanduel_name}")
-                continue
-
+            # Check if prop already exists
             exists = (
                 db.session.query(Prop)
                 .filter_by(date=game_date, player_id=player.id, event_id=event_id, prop_type=prop_type)
@@ -281,8 +181,17 @@ def pull_fanduel_props():
                     odds=odds
                 ))
                 new_props += 1
+    
+    # Print summary
+    print(f"\n📊 MARKET SUMMARY:")
+    total_markets = 0
+    for market_type, count in markets_found.items():
+        category = target_markets[market_type]
+        print(f"   {category}: {count} markets found ({market_type})")
+        total_markets += count
+    
     db.session.commit()
-    print(f"Added {new_props} props.")
+    print(f"\n🎉 Added {new_props} props from {total_markets} markets total!")
 
 def main():
     """Main function with error handling to prevent crashes."""
