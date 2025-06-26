@@ -6,7 +6,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import requests
 from app import create_app
 from app.models import db, Player, Prop
-from datetime import datetime
+from datetime import datetime, date, timedelta
+import logging
 
 url = "https://sbapi.nj.sportsbook.fanduel.com/api/content-managed-page?page=CUSTOM&customPageId=mlb&pbHorizontal=false&_ak=FhMFpcPWXMeyZxOx&timezone=America%2FNew_York"
 
@@ -67,13 +68,24 @@ def pull_fanduel_props():
     print(f"[DEBUG] Loaded {len(name_map)} player names from DB")
 
     # Try to build mapping from eventId to openDate
+    # Focus on today and tomorrow's games only for cleaner data
     event_id_to_date = {}
+    today = date.today()
+    tomorrow = today + timedelta(days=1)
+    target_dates = {today, tomorrow}
+    
     for eid, event in events.items():
         openDate = event.get("openDate")
         if openDate:
             try:
                 game_date = datetime.fromisoformat(openDate.replace('Z', '+00:00')).date()
-                event_id_to_date[str(eid)] = game_date
+                # Only include today and tomorrow's games
+                if game_date in target_dates:
+                    event_id_to_date[str(eid)] = game_date
+                    if game_date == today:
+                        print(f"[DEBUG] Found TODAY's game: {event.get('name')} on {game_date}")
+                    elif game_date == tomorrow:
+                        print(f"[DEBUG] Found TOMORROW's game: {event.get('name')} on {game_date}")
             except Exception as ex:
                 print(f"[DEBUG] Could not parse openDate '{openDate}' for event {eid}: {ex}")
 
@@ -94,6 +106,7 @@ def pull_fanduel_props():
 
     new_props = 0
 
+    hit_markets_found = 0
     for m in markets.values():
         market_type = m.get("marketType")
         prop_type = m.get("marketName")
@@ -103,20 +116,36 @@ def pull_fanduel_props():
         # Only use PLAYER_TO_RECORD_A_HIT for now
         if market_type != "PLAYER_TO_RECORD_A_HIT":
             continue
+            
+        hit_markets_found += 1
+        print(f"[DEBUG] Found PLAYER_TO_RECORD_A_HIT market #{hit_markets_found}: event_id={event_id}, prop_type={prop_type}")
 
         # Prefer event date, fallback to competition date
         game_date = event_id_to_date.get(event_id)
         if not game_date:
             game_date = competition_id_to_date.get(competition_id)
 
+        # If no game_date found, be more permissive and include the prop anyway
+        # This helps capture props that might have date parsing issues
         if not game_date:
-            print(f"[DEBUG] No game_date found for market event_id {event_id}, competition_id {competition_id}")
-            continue
+            # Use today's date as fallback for props without clear dates
+            game_date = date.today()
+            print(f"[DEBUG] No game_date found for market event_id {event_id}, competition_id {competition_id}, using today's date as fallback")
+        else:
+            print(f"[DEBUG] Using game_date {game_date} for event_id {event_id}")
 
-        for runner in m.get("runners", []):
+        runners = m.get("runners", [])
+        print(f"[DEBUG] Processing {len(runners)} runners for event_id {event_id}")
+        
+        for runner in runners:
             fanduel_name = runner.get("runnerName", "")
             line = runner.get("handicap")
             odds = runner.get("winRunnerOdds", {}).get("americanDisplayOdds", {}).get("americanOdds")
+            
+            if not fanduel_name:
+                print(f"[DEBUG] Skipping runner with no name")
+                continue
+                
             norm_name = normalize_name(fanduel_name)
             player = name_map.get(norm_name)
             if not player:
@@ -128,6 +157,8 @@ def pull_fanduel_props():
             if not player:
                 print(f"[NO MATCH] {fanduel_name} (normalized: '{norm_name}')")
                 continue
+
+            print(f"[DEBUG] Found player: {fanduel_name} -> {player.name} (ID: {player.id})")
 
             exists = (
                 db.session.query(Prop)
@@ -145,6 +176,8 @@ def pull_fanduel_props():
                     odds=odds
                 ))
                 new_props += 1
+            else:
+                print(f"[DEBUG] Prop already exists for {fanduel_name}")
 
     db.session.commit()
     print(f"\nAdded {new_props} props.")
@@ -252,9 +285,15 @@ def pull_fanduel_props():
     print(f"Added {new_props} props.")
 
 def main():
-    app = create_app()
-    with app.app_context():
-        pull_fanduel_props()
+    """Main function with error handling to prevent crashes."""
+    try:
+        app = create_app()
+        with app.app_context():
+            pull_fanduel_props()
+    except Exception as e:
+        logging.error(f"Critical error in fetch_props: {e}")
+        print(f"Error: {e}")
+        raise
 
 if __name__ == "__main__":
     main()

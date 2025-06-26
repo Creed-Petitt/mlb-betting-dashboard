@@ -2,42 +2,821 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>MLB Prop Dashboard</title>
+    <title>MLB Player Props - Analysis Dashboard</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="/static/dashboard.css">
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        .navbar {
+            background: #ffffff;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 1rem 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .navbar .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .navbar-brand {
+            font-weight: 800;
+            font-size: 1.5rem;
+            color: #1e293b !important;
+        }
+
+        .navbar-subtitle {
+            color: #64748b;
+            font-size: 0.875rem;
+            margin-top: 2px;
+        }
+
+        .filters-section {
+            background: white;
+            padding: 1.5rem 0;
+            border-bottom: 1px solid #e2e8f0;
+            margin-bottom: 2rem;
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 1.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .filter-label {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #374151;
+            margin-right: 0.75rem;
+            min-width: 80px;
+        }
+
+        .form-select {
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.875rem;
+            background: white;
+            min-width: 150px;
+        }
+
+        .form-select:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+        }
+
+        .props-summary-bar {
+            background: #f1f5f9;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .summary-text {
+            color: #64748b;
+            font-size: 0.875rem;
+        }
+
+        .summary-count {
+            font-weight: 700;
+            color: #1e293b;
+        }
+
+        .props-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 1rem;
+            padding: 1rem 0;
+        }
+
+        .prop-card {
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            padding: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            height: auto;
+        }
+
+        .prop-card:hover {
+            border-color: #3b82f6;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+            transform: translateY(-1px);
+        }
+
+        .prop-card.selected {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+        }
+
+        .prop-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .player-headshot {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #f1f5f9;
+        }
+
+        .player-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .player-info h3 {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #1e293b;
+            margin: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .player-meta {
+            font-size: 0.75rem;
+            color: #64748b;
+            margin: 0;
+        }
+
+        .team-logo-small {
+            width: 24px;
+            height: 24px;
+            flex-shrink: 0;
+        }
+
+        .prop-type {
+            font-size: 0.75rem;
+            color: #64748b;
+            text-align: center;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .prop-analysis {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .prop-line-section {
+            text-align: center;
+            margin: 0.5rem 0;
+            padding: 0.5rem;
+            background: #f8fafc;
+            border-radius: 6px;
+        }
+
+        .prop-line-display {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .line-label {
+            font-size: 0.75rem;
+            color: #64748b;
+            font-weight: 500;
+        }
+
+        .line-value {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #1e293b;
+        }
+
+        .vs-indicator {
+            font-size: 1rem;
+            color: #64748b;
+            font-weight: 600;
+        }
+
+        .projection {
+            text-align: center;
+        }
+
+        .projection .prop-value {
+            color: #059669;
+        }
+
+        .odds-section {
+            margin: 0.5rem 0;
+        }
+
+        .best-odds {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.25rem;
+            font-size: 0.75rem;
+        }
+
+        .odds-value {
+            background: #1f2937;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.75rem;
+        }
+
+        .value-rating {
+            display: flex;
+            gap: 2px;
+        }
+
+        .star {
+            color: #fbbf24;
+            font-size: 1rem;
+        }
+
+        .star.empty {
+            color: #e5e7eb;
+        }
+
+        .action-buttons {
+            margin-top: 0.5rem;
+        }
+
+        .btn-analyze {
+            width: 100%;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 0.5rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .btn-analyze:hover {
+            background: #2563eb;
+        }
+
+        .loading-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 4rem 2rem;
+            text-align: center;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #f1f5f9;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: #64748b;
+        }
+
+        .empty-state h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #1e293b;
+        }
+
+        .empty-state p {
+            font-size: 0.875rem;
+            opacity: 0.8;
+        }
+
+        #error-box {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #ef4444;
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1001;
+            font-weight: 600;
+            max-width: 400px;
+        }
+
+        @media (max-width: 768px) {
+            .props-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+            
+            .prop-card {
+                padding: 1rem;
+            }
+            
+            .filter-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .nav-tab {
+            background: none;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #64748b;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .nav-tab:hover {
+            background: #f1f5f9;
+            color: #374151;
+        }
+
+        .nav-tab.active {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .coming-soon-text {
+            font-size: 0.875rem;
+            color: #64748b;
+            font-style: italic;
+            background: #f8fafc;
+            padding: 0.5rem 0.75rem;
+            border-radius: 4px;
+            border: 1px solid #e2e8f0;
+        }
+
+        /* Analysis Modal Styles - Fixed Size, No Scroll, Dashboard Consistency */
+        .analysis-modal-content {
+            background: white;
+            border-radius: 16px;
+            width: 900px;
+            height: 650px;
+            max-width: 95vw;
+            max-height: 95vh;
+            overflow: hidden;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .analysis-modal-header {
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid #e5e7eb;
+            background: #fff;
+            border-radius: 16px 16px 0 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .analysis-header-content {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex: 1;
+        }
+
+        .analysis-prop-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #1e293b;
+        }
+
+        .analysis-prop-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .analysis-line-badge {
+            background: #f1f5f9;
+            color: #1e293b;
+            border: 1px solid #e5e7eb;
+            font-size: 0.875rem;
+            font-weight: 600;
+            padding: 0.375rem 0.75rem;
+            border-radius: 8px;
+        }
+
+        .analysis-odds-badge {
+            background: #1e293b;
+            color: white;
+            font-size: 0.875rem;
+            font-weight: 600;
+            padding: 0.375rem 0.75rem;
+            border-radius: 8px;
+        }
+
+        .analysis-close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: #64748b;
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 8px;
+            transition: background 0.2s;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .analysis-close-btn:hover {
+            background: #f1f5f9;
+        }
+
+        .analysis-modal-body {
+            padding: 2rem;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            overflow: hidden;
+        }
+
+        /* Matchup Section */
+        .analysis-matchup {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+            justify-content: center;
+        }
+
+        .analysis-player-card {
+            display: flex;
+            align-items: center;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            border: 1px solid #e5e7eb;
+            padding: 1.25rem;
+            gap: 1rem;
+            flex: 1;
+            max-width: 280px;
+        }
+
+        .analysis-player-avatar {
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .analysis-headshot {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid #f1f5f9;
+        }
+
+        .analysis-player-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .analysis-player-name {
+            font-size: 1.125rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin: 0 0 0.25rem 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .analysis-player-meta {
+            font-size: 0.875rem;
+            color: #64748b;
+            margin: 0;
+            font-weight: 500;
+        }
+
+        .analysis-team-logo {
+            width: 36px;
+            height: 36px;
+            object-fit: contain;
+            flex-shrink: 0;
+        }
+
+        .analysis-vs {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .analysis-vs-text {
+            background: #4F46E5;
+            color: white;
+            font-size: 1rem;
+            font-weight: 700;
+            padding: 0.75rem 1.25rem;
+            border-radius: 50px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
+        }
+
+        /* Stats Section */
+        .analysis-stats-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .analysis-stats-panel {
+            background: #fff;
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .analysis-stats-title {
+            font-size: 1.125rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin: 0 0 1.25rem 0;
+            text-align: center;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid #f1f5f9;
+        }
+
+        .analysis-stats-periods {
+            display: flex;
+            flex-direction: row;
+            gap: 1rem;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .analysis-stats-period {
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 0.75rem;
+            border: 1px solid #e5e7eb;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .analysis-stats-period h5 {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #374151;
+            margin: 0 0 0.75rem 0;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            text-align: center;
+            padding-bottom: 0.375rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .analysis-stats-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            flex: 1;
+        }
+
+        .analysis-stat-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.25rem 0;
+        }
+
+        .analysis-stat-label {
+            font-size: 0.7rem;
+            color: #64748b;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+        }
+
+        .analysis-stat-value {
+            font-size: 0.875rem;
+            font-weight: 700;
+            color: #1e293b;
+            background: #fff;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            border: 1px solid #e5e7eb;
+            min-width: 50px;
+            text-align: center;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+    </style>
 </head>
 <body>
-<div class="container">
-    <div class="left-panel">
-        <h2>Props</h2>
-        <div id="props-list"></div>
+<div id="error-box" style="display:none;"></div>
+    
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="navbar-brand">
+                ⚾ MLB Dashboard
+                <div class="navbar-subtitle">Live FanDuel odds and projections</div>
+            </div>
+            <div class="nav-tabs">
+                <button class="nav-tab active" onclick="switchSection('props')">Player Props</button>
+                <button class="nav-tab" onclick="switchSection('games')">Games & Weather</button>
+                <button class="nav-tab" onclick="switchSection('standings')">Standings</button>
+                <button class="nav-tab" onclick="switchSection('stats')">Stat Leaders</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Filters Section -->
+    <div class="filters-section">
+        <div class="container">
+            <div class="filter-group">
+                <div class="d-flex align-items-center">
+                    <span class="filter-label">Props</span>
+                    <span class="coming-soon-text">Hits (Other props coming soon)</span>
+                </div>
+                
+                <div class="d-flex align-items-center">
+                    <span class="filter-label">Teams</span>
+                    <select class="form-select" id="team-filter">
+                        <option value="">All Teams</option>
+                    </select>
+                </div>
+            </div>
+        </div>
     </div>
-    <div class="right-panel">
-        <div class="matchup-panel">
-            <div class="matchup-title">Player Matchup</div>
-            <div class="matchup-main">
-                <div class="player-card">
-                    <img id="batter-headshot" class="player-headshot" src="/static/headshots/default.png">
-                    <img id="batter-team-logo" class="team-logo" src="">
-                    <div id="batter-name" class="player-name"></div>
+
+    <!-- Main Content -->
+    <div class="container">
+        <!-- Summary Bar -->
+        <div class="props-summary-bar">
+            <div class="summary-text">
+                <span class="summary-count" id="props-count">Loading...</span> player props available
+                        </div>
+            <div class="summary-text">
+                FanDuel Sportsbook
+                    </div>
                 </div>
-                <div class="vs-text">VS</div>
-                <div class="player-card">
-                    <img id="pitcher-headshot" class="player-headshot" src="/static/headshots/default.png">
-                    <img id="pitcher-team-logo" class="team-logo" src="">
-                    <div id="pitcher-name" class="player-name"></div>
+
+        <!-- Props Grid -->
+        <div id="props-container">
+            <div class="loading-state">
+                <div class="loading-spinner"></div>
+                <h3>Loading Player Props</h3>
+                <p>Fetching the latest odds from FanDuel...</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+    <!-- Analysis Modal -->
+    <div id="analysis-modal" class="modal-overlay" style="display: none;">
+        <div class="analysis-modal-content">
+            <div class="analysis-modal-header">
+                <div class="analysis-header-content">
+                    <div class="analysis-prop-title">Total Hits - Over 0.5</div>
+                    <div class="analysis-prop-meta">
+                        <span class="analysis-line-badge">0.5</span>
+                        <span class="analysis-odds-badge">+110</span>
+                    </div>
                 </div>
+                <button class="analysis-close-btn" onclick="closeAnalysisModal()">&times;</button>
             </div>
-            <div class="stats-row">
-                <div class="stats-card" id="batter-stats"></div>
-                <div class="stats-card" id="pitcher-stats"></div>
-            </div>
-            <div class="prop-details">
-                <span id="prop-type"></span>
-                <span id="prop-odds"></span>
+            
+            <div class="analysis-modal-body">
+                <!-- Matchup Section -->
+                <div class="analysis-matchup">
+                    <div class="analysis-player-card analysis-batter">
+                        <div class="analysis-player-avatar">
+                            <img class="analysis-headshot" src="/static/headshots/placeholder.svg" alt="Batter">
+                        </div>
+                        <div class="analysis-player-info">
+                            <h3 class="analysis-player-name">Loading...</h3>
+                            <p class="analysis-player-meta">Loading...</p>
+                        </div>
+                        <img class="analysis-team-logo" src="/static/team_logos/placeholder.svg" alt="Team">
+                    </div>
+                    
+                    <div class="analysis-vs">
+                        <div class="analysis-vs-text">VS</div>
+                    </div>
+                    
+                    <div class="analysis-player-card analysis-pitcher">
+                        <div class="analysis-player-avatar">
+                            <img class="analysis-headshot" src="/static/headshots/placeholder.svg" alt="Pitcher">
+                        </div>
+                        <div class="analysis-player-info">
+                            <h3 class="analysis-player-name">Loading...</h3>
+                            <p class="analysis-player-meta">Loading...</p>
+                        </div>
+                        <img class="analysis-team-logo" src="/static/team_logos/placeholder.svg" alt="Team">
+                    </div>
+                </div>
+                
+                <!-- Stats Section -->
+                <div class="analysis-stats-container">
+                    <div class="analysis-stats-panel">
+                        <h4 class="analysis-stats-title">Batter Stats</h4>
+                        <div class="analysis-stats-periods">
+                            <div class="analysis-stats-period">
+                                <h5>2024 Season</h5>
+                                <div id="batter-season-stats" class="analysis-stats-grid">
+                                    <div class="analysis-stat-item">
+                                        <span class="analysis-stat-label">Loading...</span>
+                                        <span class="analysis-stat-value">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="analysis-stats-period">
+                                <h5>Career</h5>
+                                <div id="batter-career-stats" class="analysis-stats-grid">
+                                    <div class="analysis-stat-item">
+                                        <span class="analysis-stat-label">Loading...</span>
+                                        <span class="analysis-stat-value">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="analysis-stats-panel">
+                        <h4 class="analysis-stats-title">Pitcher Stats</h4>
+                        <div class="analysis-stats-periods">
+                            <div class="analysis-stats-period">
+                                <h5>2024 Season</h5>
+                                <div id="pitcher-season-stats" class="analysis-stats-grid">
+                                    <div class="analysis-stat-item">
+                                        <span class="analysis-stat-label">Loading...</span>
+                                        <span class="analysis-stat-value">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="analysis-stats-period">
+                                <h5>Career</h5>
+                                <div id="pitcher-career-stats" class="analysis-stats-grid">
+                                    <div class="analysis-stat-item">
+                                        <span class="analysis-stat-label">Loading...</span>
+                                        <span class="analysis-stat-value">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
+
 <script src="/static/dashboard.js"></script>
 </body>
 </html>

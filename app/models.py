@@ -1,8 +1,28 @@
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import event, text
+from sqlalchemy.engine import Engine
+from sqlalchemy.exc import DisconnectionError, OperationalError
+import logging
+from typing import Optional
 
 db = SQLAlchemy()
 
+# Database connection event handlers for resilience
+@event.listens_for(Engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    """Set SQLite connection options for better performance and reliability."""
+    if 'sqlite' in str(dbapi_connection):
+        cursor = dbapi_connection.cursor()
+        # Enable WAL mode for better concurrency
+        cursor.execute("PRAGMA journal_mode=WAL")
+        # Set timeout for busy database
+        cursor.execute("PRAGMA busy_timeout=20000")
+        # Enable foreign key constraints
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
 class Team(db.Model):
+    """Represents an MLB team."""
     __tablename__ = 'teams'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(64), nullable=False)
@@ -11,8 +31,12 @@ class Team(db.Model):
     logo_url = db.Column(db.String(256), nullable=True)
     league = db.Column(db.String(8), nullable=True)
     division = db.Column(db.String(16), nullable=True)
+    players = db.relationship('Player', backref='team', lazy=True)
+    home_games = db.relationship('Game', backref='home_team', foreign_keys='Game.home_team_id', lazy=True)
+    away_games = db.relationship('Game', backref='away_team', foreign_keys='Game.away_team_id', lazy=True)
 
 class Player(db.Model):
+    """Represents an MLB player."""
     __tablename__ = 'players'
     id = db.Column(db.Integer, primary_key=True)  # MLB ID
     name = db.Column(db.String(64), nullable=False)
@@ -24,8 +48,11 @@ class Player(db.Model):
     date_of_birth = db.Column(db.Date, nullable=True)
     mlb_debut = db.Column(db.Date, nullable=True)
     is_pitcher = db.Column(db.Boolean, default=False)
+    stats = db.relationship('Stat', backref='player', lazy=True)
+    props = db.relationship('Prop', backref='player', lazy=True)
 
 class Game(db.Model):
+    """Represents an MLB game."""
     __tablename__ = 'games'
     id = db.Column(db.Integer, primary_key=True)  # MLB gamePk
     date = db.Column(db.Date, nullable=False)
@@ -36,6 +63,7 @@ class Game(db.Model):
     venue = db.Column(db.String(128), nullable=True)
 
 class Roster(db.Model):
+    """Represents a roster entry for a player on a team at a given date."""
     __tablename__ = 'rosters'
     id = db.Column(db.Integer, primary_key=True)
     player_id = db.Column(db.Integer, db.ForeignKey('players.id'), nullable=False)
@@ -43,6 +71,7 @@ class Roster(db.Model):
     date = db.Column(db.Date, nullable=False)
 
 class Stat(db.Model):
+    """Represents a player stat for a season or game."""
     __tablename__ = 'stats'
     id = db.Column(db.Integer, primary_key=True)
     player_id = db.Column(db.Integer, db.ForeignKey('players.id'), nullable=False)
@@ -53,6 +82,7 @@ class Stat(db.Model):
     date = db.Column(db.Date, nullable=True)  # For game-by-game stats, can be null for season/career
 
 class Prop(db.Model):
+    """Represents a betting prop for a player in a game/event."""
     __tablename__ = 'props'
     id = db.Column(db.Integer, primary_key=True)
     date = db.Column(db.Date, nullable=False)
@@ -63,6 +93,7 @@ class Prop(db.Model):
     odds = db.Column(db.String(16), nullable=True)
 
 class Matchup(db.Model):
+    """Represents a batter vs pitcher matchup for a given date."""
     __tablename__ = 'matchups'
     id = db.Column(db.Integer, primary_key=True)
     batter_id = db.Column(db.Integer, db.ForeignKey('players.id'), nullable=False)
@@ -75,6 +106,7 @@ class Matchup(db.Model):
     pitcher_team_id = db.Column(db.Integer, nullable=True)
 
 class PlayerIDMap(db.Model):
+    """Maps MLB IDs to ESPN IDs and potentially other sources."""
     __tablename__ = 'player_id_map'
     id = db.Column(db.Integer, primary_key=True)
     mlb_id = db.Column(db.Integer, nullable=False, unique=True)

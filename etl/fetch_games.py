@@ -8,7 +8,7 @@ from dateutil import tz
 from app import create_app
 from app.models import db, Team, Player, Game, Prop
 
-def fetch_upcoming_games(days_ahead=4):
+def fetch_upcoming_games(days_ahead=1):
     today = datetime.today().date()
     end_date = today + timedelta(days=days_ahead)
     url = (
@@ -84,8 +84,9 @@ def fetch_upcoming_games(days_ahead=4):
             else:
                 print(f"[fetch_games] WARNING: No probable away pitcher for team {away_team_id} ({away_team_name}) in game {gid}")
 
-            # Insert game if missing
-            if not db.session.get(Game, gid):
+            # Insert or update game
+            existing_game = db.session.get(Game, gid)
+            if not existing_game:
                 print(f"[fetch_games] Inserting game {gid} on {gdate}: {home_team_name} vs {away_team_name}")
                 db.session.add(Game(
                     id=gid,
@@ -96,6 +97,19 @@ def fetch_upcoming_games(days_ahead=4):
                     away_pitcher_id=away_pitcher_id
                 ))
                 game_count += 1
+            else:
+                # Update pitcher information if it's now available
+                updated = False
+                if home_pitcher_id and existing_game.home_pitcher_id != home_pitcher_id:
+                    print(f"[fetch_games] Updating home pitcher for game {gid}: {home_pitcher_id} ({home_pitcher_name})")
+                    existing_game.home_pitcher_id = home_pitcher_id
+                    updated = True
+                if away_pitcher_id and existing_game.away_pitcher_id != away_pitcher_id:
+                    print(f"[fetch_games] Updating away pitcher for game {gid}: {away_pitcher_id} ({away_pitcher_name})")
+                    existing_game.away_pitcher_id = away_pitcher_id
+                    updated = True
+                if updated:
+                    game_count += 1
 
     db.session.commit()
     print(f"[fetch_games] Inserted {game_count} new games, {len(teams_added)} teams, {pitcher_count} pitchers")
@@ -114,7 +128,7 @@ def fetch_upcoming_games(days_ahead=4):
 def main():
     app = create_app()
     with app.app_context():
-        fetch_upcoming_games(days_ahead=4)  # adjust as needed
+        fetch_upcoming_games(days_ahead=1)  # today + tomorrow only
 
 if __name__ == "__main__":
     main()

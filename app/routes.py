@@ -1,114 +1,421 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request, render_template, current_app
 from app import db
 from app.models import Player, Prop, Game, Team, Stat, PlayerIDMap
-from flask import render_template
+from app.utils import log_api_call, handle_database_error, validate_integer_input, validate_string_input
+from sqlalchemy.exc import SQLAlchemyError
+from typing import Optional, Dict, Any
+from datetime import date, timedelta
 
 bp = Blueprint('main', __name__)
 
 @bp.route("/")
 def index():
+    """Render the dashboard page."""
     return render_template("dashboard.html")
 
-def get_player_stats(player_id, season=None):
-    stats = Stat.query.filter_by(player_id=player_id)
-    if season:
-        stats = stats.filter_by(season=season)
-    stats_dict = {}
-    for s in stats:
-        stats_dict[s.stat_name] = s.stat_value
-    return stats_dict
+def get_player_stats(player_id: int, season: Optional[str] = None, stat_type: Optional[str] = None) -> Dict[str, Any]:
+    """Return a dict of stat_name: stat_value for a player, with intelligent fallback logic. Optionally filter by stat_type ('hitting' or 'pitching')."""
+    try:
+        query = Stat.query.filter_by(player_id=player_id)
+        if season:
+            query = query.filter_by(season=season)
+        if stat_type:
+            query = query.filter_by(stat_type=stat_type)
+        stats = query.all()
+        if stats:
+            stats_dict = {s.stat_name: s.stat_value for s in stats}
+            return stats_dict
+        # No stats for requested season/type, try career fallback if not already
+        if season and season != "career":
+            query = Stat.query.filter_by(player_id=player_id, season="career")
+            if stat_type:
+                query = query.filter_by(stat_type=stat_type)
+            career_stats = query.all()
+            if career_stats:
+                stats_dict = {s.stat_name: s.stat_value for s in career_stats}
+                current_app.logger.info(f"Player {player_id}: Using career stats fallback for season {season}")
+                return stats_dict
+        current_app.logger.warning(f"Player {player_id}: No stats found for season {season} and type {stat_type}")
+        return {}
+    except SQLAlchemyError as e:
+        current_app.logger.error(f"Error fetching player stats: {e}")
+        return {}
 
-def get_team(team_id):
-    team = Team.query.filter_by(id=team_id).first()
-    return {
-        "id": team.id,
-        "abbr": team.abbr,
-        "logo": f"/static/team_logos/{team.id}.svg"
-    } if team else {}
+def get_team(team_id: int) -> Dict[str, Any]:
+    """Return team info dict for a given team_id."""
+    try:
+        team = Team.query.filter_by(id=team_id).first()
+        return {
+            "id": team.id,
+            "abbr": team.abbr,
+            "logo": f"/static/team_logos/{team.id}.svg"
+        } if team else {}
+    except SQLAlchemyError as e:
+        current_app.logger.error(f"Error fetching team: {e}")
+        return {}
 
-def get_espn_id_from_map(mlb_id):
-    # Returns ESPN ID from the PlayerIDMap for the given MLB ID, or None
-    mapping = PlayerIDMap.query.filter_by(mlb_id=mlb_id).first()
-    return mapping.espn_id if mapping and mapping.espn_id else None
+def get_espn_id_from_map(mlb_id: int) -> Optional[int]:
+    """Returns ESPN ID from the PlayerIDMap for the given MLB ID, or None."""
+    try:
+        mapping = PlayerIDMap.query.filter_by(mlb_id=mlb_id).first()
+        return mapping.espn_id if mapping and mapping.espn_id else None
+    except SQLAlchemyError as e:
+        current_app.logger.error(f"Error fetching ESPN ID: {e}")
+        return None
 
-def get_headshot(mlb_id):
+def get_headshot(mlb_id: int) -> str:
+    """Return the headshot URL for a player, or a placeholder if not found."""
     espn_id = get_espn_id_from_map(mlb_id)
     if espn_id and str(espn_id) != "None":
         return f"/static/headshots/{espn_id}.png"
     return "/static/headshots/placeholder.png"
 
 @bp.route('/api/props')
+@log_api_call
+@handle_database_error
 def get_props():
-    props = Prop.query.all()
-    results = []
-    for prop in props:
-        player = Player.query.filter_by(id=prop.player_id).first()
-        player_team = Team.query.filter_by(id=player.team_id).first() if player else None
-        espn_id = get_espn_id_from_map(player.id) if player else None
-        results.append({
-            "prop_id": prop.id,
-            "player_id": prop.player_id,
-            "player_name": player.name if player else None,
-            "player_team_id": player_team.id if player_team else None,
-            "player_team_abbr": player_team.abbr if player_team else "",
-            "player_espn_id": espn_id,
-            "prop_type": prop.prop_type,
-            "odds": prop.odds,
-            "line": prop.line,
-            "event_id": prop.event_id,
-            "date": prop.date.isoformat()
+    """Return a list of props with optional team filtering."""
+    try:
+        # Validate query parameters
+        team_id = None
+        if request.args.get('team_id'):
+            team_id = validate_integer_input(request.args.get('team_id'), min_val=1, field_name="team_id")
+        
+        per_page = validate_integer_input(
+            request.args.get('per_page', 300), 
+            min_val=1, 
+            max_val=current_app.config.get('MAX_PAGE_SIZE', 1000),
+            field_name="per_page"
+        )
+        
+        # ONLY today's props - nothing else
+        today = date.today()
+        
+        # Base query for TODAY ONLY
+        props_query = Prop.query.filter(Prop.date == today).order_by(Prop.odds.desc())
+        
+        # Add team filter if specified
+        if team_id:
+            props_query = props_query.join(Player).filter(Player.team_id == team_id)
+        
+        props = props_query.limit(per_page).all()
+        
+        # Build results with date formatting
+        results = []
+        seen_players = set()  # Track players to avoid duplicates (simplified since no overlap)
+        
+        for prop in props:
+            player = Player.query.filter_by(id=prop.player_id).first()
+            if not player:
+                continue
+                
+            # Simple duplicate check - since there's no overlap between dates, this should work fine
+            player_prop_key = f"{player.id}-{prop.prop_type}"
+            if player_prop_key in seen_players:
+                continue
+            seen_players.add(player_prop_key)
+            
+            player_team = Team.query.filter_by(id=player.team_id).first()
+            espn_id = get_espn_id_from_map(player.id)
+            
+            # Get season hits if available
+            season_hits = None
+            season = str(prop.date.year)
+            hits_stat = Stat.query.filter_by(player_id=player.id, season=season, stat_name='h').first()
+            season_hits = int(hits_stat.stat_value) if hits_stat else None
+            
+            results.append({
+                "prop_id": prop.id,
+                "player_id": prop.player_id,
+                "player_name": player.name,
+                "player_team_id": player_team.id if player_team else None,
+                "player_team_abbr": player_team.abbr if player_team else "",
+                "player_espn_id": espn_id,
+                "prop_type": prop.prop_type,
+                "odds": prop.odds,
+                "line": prop.line,
+                "event_id": prop.event_id,
+                "date": prop.date.isoformat(),
+                "date_formatted": prop.date.strftime("%m/%d"),
+                "is_today": prop.date == today,
+                "is_tomorrow": prop.date == today + timedelta(days=1),
+                "position": player.position,
+                "bats": player.bats,
+                "throws": player.throws,
+                "season_hits": season_hits
+            })
+        
+        return jsonify({
+            "results": results,
+            "total": len(results)
         })
-    return jsonify(results)
+    except ValueError as e:
+        current_app.logger.warning(f"Input validation error in get_props: {str(e)}")
+        return jsonify({"error": str(e)}), 400
+    except SQLAlchemyError as e:
+        current_app.logger.error(f"Error fetching props: {e}")
+        return jsonify({"error": "Database error"}), 500
+    except Exception as e:
+        current_app.logger.error(f"Unexpected error in get_props: {e}")
+        return jsonify({"error": "Unexpected error"}), 500
+
+@bp.route('/api/teams')
+@log_api_call
+@handle_database_error
+def get_teams():
+    """Return all teams for filtering."""
+    try:
+        teams = Team.query.order_by(Team.name).all()
+        results = []
+        for team in teams:
+            results.append({
+                "id": team.id,
+                "name": team.name,
+                "abbr": team.abbr,
+                "logo": f"/static/team_logos/{team.id}.svg"
+            })
+        return jsonify(results)
+    except SQLAlchemyError as e:
+        current_app.logger.error(f"Error fetching teams: {e}")
+        return jsonify({"error": "Database error"}), 500
+    except Exception as e:
+        current_app.logger.error(f"Unexpected error in get_teams: {e}")
+        return jsonify({"error": "Unexpected error"}), 500
+
+@bp.route('/api/health')
+@log_api_call
+def health_check():
+    """Application health check endpoint."""
+    from .utils import health_check
+    return jsonify(health_check())
 
 @bp.route('/api/prop/<int:prop_id>/matchup')
-def get_prop_matchup(prop_id):
-    prop = Prop.query.filter_by(id=prop_id).first()
-    if not prop:
-        return jsonify({"error": "Prop not found"}), 404
-
-    batter = Player.query.filter_by(id=prop.player_id).first()
-    if not batter:
-        return jsonify({"error": "Batter not found"}), 404
-
-    game = Game.query.filter(
-        Game.date == prop.date,
-        ((Game.home_team_id == batter.team_id) | (Game.away_team_id == batter.team_id))
-    ).first()
-
-    pitcher_id = None
-    pitcher_team_id = None
-    if game:
-        if game.home_team_id == batter.team_id:
-            pitcher_id = game.away_pitcher_id or game.home_pitcher_id
-            pitcher_team_id = game.away_team_id
-        else:
-            pitcher_id = game.home_pitcher_id or game.away_pitcher_id
-            pitcher_team_id = game.home_team_id
-        if not pitcher_id:
-            pitcher_id = game.home_pitcher_id or game.away_pitcher_id
-
-    pitcher = Player.query.filter_by(id=pitcher_id).first() if pitcher_id else None
-
-    result = {
-        "batter": {
-            "name": batter.name if batter else "N/A",
-            "headshot": get_headshot(batter.id),
-            "team": get_team(batter.team_id) if batter and batter.team_id else {},
-            "season_stats": get_player_stats(batter.id, season=str(prop.date.year)) if batter else {},
-            "career_stats": get_player_stats(batter.id, season="career") if batter else {},
-        },
-        "pitcher": {
-            "name": pitcher.name if pitcher else "N/A",
-            "headshot": get_headshot(pitcher.id) if pitcher else "/static/headshots/placeholder.png",
-            "team": get_team(pitcher_team_id) if pitcher_team_id else {},
-            "season_stats": get_player_stats(pitcher.id, season=str(prop.date.year)) if pitcher else {},
-            "career_stats": get_player_stats(pitcher.id, season="career") if pitcher else {},
-        },
-        "prop": {
-            "type": prop.prop_type or "",
-            "odds": prop.odds or "",
-            "line": prop.line or ""
+@log_api_call
+@handle_database_error
+def get_prop_matchup(prop_id: int):
+    """Return the batter vs pitcher matchup for a given prop."""
+    try:
+        # Validate prop_id
+        prop_id = validate_integer_input(prop_id, min_val=1, field_name="prop_id")
+        prop = Prop.query.filter_by(id=prop_id).first()
+        if not prop:
+            return jsonify({"error": "Prop not found"}), 404
+        batter = Player.query.filter_by(id=prop.player_id).first()
+        if not batter:
+            return jsonify({"error": "Batter not found"}), 404
+        game = Game.query.filter(
+            Game.date == prop.date,
+            ((Game.home_team_id == batter.team_id) | (Game.away_team_id == batter.team_id))
+        ).first()
+        pitcher_id = None
+        pitcher_team_id = None
+        if game:
+            if game.home_team_id == batter.team_id:
+                pitcher_id = game.away_pitcher_id or game.home_pitcher_id
+                pitcher_team_id = game.away_team_id
+            else:
+                pitcher_id = game.home_pitcher_id or game.away_pitcher_id
+                pitcher_team_id = game.home_team_id
+            if not pitcher_id:
+                pitcher_id = game.home_pitcher_id or game.away_pitcher_id
+        pitcher = Player.query.filter_by(id=pitcher_id).first() if pitcher_id else None
+        # Only return hitting stats for hitters, pitching stats for pitchers
+        batter_stats_type = "hitting" if batter and not batter.is_pitcher else "pitching"
+        pitcher_stats_type = "pitching" if pitcher and pitcher.is_pitcher else "hitting"
+        result = {
+            "batter": {
+                "name": batter.name if batter else "N/A",
+                "headshot": get_headshot(batter.id),
+                "team": get_team(batter.team_id) if batter and batter.team_id else {},
+                "season_stats": get_player_stats(batter.id, season=str(prop.date.year), stat_type=batter_stats_type) if batter else {},
+                "career_stats": get_player_stats(batter.id, season="career", stat_type=batter_stats_type) if batter else {},
+            },
+            "pitcher": {
+                "name": pitcher.name if pitcher else "N/A",
+                "headshot": get_headshot(pitcher.id) if pitcher else "/static/headshots/placeholder.png",
+                "team": get_team(pitcher_team_id) if pitcher_team_id else {},
+                "season_stats": get_player_stats(pitcher.id, season=str(prop.date.year), stat_type=pitcher_stats_type) if pitcher else {},
+                "career_stats": get_player_stats(pitcher.id, season="career", stat_type=pitcher_stats_type) if pitcher else {},
+            },
+            "prop": {
+                "type": prop.prop_type or "",
+                "odds": prop.odds or "",
+                "line": prop.line or ""
+            }
         }
-    }
-    return jsonify(result)
+        return jsonify(result)
+    except SQLAlchemyError as e:
+        current_app.logger.error(f"Error fetching prop matchup: {e}")
+        return jsonify({"error": "Database error"}), 500
+    except Exception as e:
+        current_app.logger.error(f"Unexpected error in get_prop_matchup: {e}")
+        return jsonify({"error": "Unexpected error"}), 500
+
+@bp.route('/api/players')
+def get_players():
+    """Return all players with their basic info."""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        team_id = request.args.get('team_id', type=int)
+        
+        query = Player.query
+        if team_id:
+            query = query.filter_by(team_id=team_id)
+            
+        players = query.order_by(Player.name).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+        
+        results = []
+        for player in players.items:
+            team = Team.query.filter_by(id=player.team_id).first()
+            espn_id = get_espn_id_from_map(player.id)
+            
+            # Get some basic season stats
+            season_stats = get_player_stats(player.id, season="2024")
+            
+            results.append({
+                "id": player.id,
+                "name": player.name,
+                "position": player.position,
+                "team": {
+                    "id": team.id if team else None,
+                    "name": team.name if team else None,
+                    "abbr": team.abbr if team else None,
+                    "logo": f"/static/team_logos/{team.id}.svg" if team else None
+                },
+                "headshot": get_headshot(player.id),
+                "bats": player.bats,
+                "throws": player.throws,
+                "season_stats": season_stats
+            })
+        
+        return jsonify({
+            "results": results,
+            "pagination": {
+                "page": players.page,
+                "per_page": players.per_page,
+                "total": players.total,
+                "pages": players.pages
+            }
+        })
+    except Exception as e:
+        current_app.logger.error(f"Error fetching players: {e}")
+        return jsonify({"error": "Failed to fetch players"}), 500
+
+@bp.route('/api/games')
+def get_games():
+    """Return recent and upcoming games."""
+    try:
+        from datetime import date, timedelta
+        
+        # Get games from 3 days ago to 7 days ahead
+        start_date = date.today() - timedelta(days=3)
+        end_date = date.today() + timedelta(days=7)
+        
+        games = Game.query.filter(
+            Game.date >= start_date,
+            Game.date <= end_date
+        ).order_by(Game.date.desc()).limit(50).all()
+        
+        results = []
+        for game in games:
+            home_team = Team.query.filter_by(id=game.home_team_id).first()
+            away_team = Team.query.filter_by(id=game.away_team_id).first()
+            home_pitcher = Player.query.filter_by(id=game.home_pitcher_id).first() if game.home_pitcher_id else None
+            away_pitcher = Player.query.filter_by(id=game.away_pitcher_id).first() if game.away_pitcher_id else None
+            
+            results.append({
+                "id": game.id,
+                "date": game.date.isoformat(),
+                "date_formatted": game.date.strftime("%m/%d"),
+                "venue": game.venue,
+                "home_team": {
+                    "id": home_team.id if home_team else None,
+                    "name": home_team.name if home_team else None,
+                    "abbr": home_team.abbr if home_team else None,
+                    "logo": f"/static/team_logos/{home_team.id}.svg" if home_team else None
+                },
+                "away_team": {
+                    "id": away_team.id if away_team else None,
+                    "name": away_team.name if away_team else None,
+                    "abbr": away_team.abbr if away_team else None,
+                    "logo": f"/static/team_logos/{away_team.id}.svg" if away_team else None
+                },
+                "home_pitcher": {
+                    "id": home_pitcher.id if home_pitcher else None,
+                    "name": home_pitcher.name if home_pitcher else None,
+                    "headshot": get_headshot(home_pitcher.id) if home_pitcher else None
+                },
+                "away_pitcher": {
+                    "id": away_pitcher.id if away_pitcher else None,
+                    "name": away_pitcher.name if away_pitcher else None,
+                    "headshot": get_headshot(away_pitcher.id) if away_pitcher else None
+                }
+            })
+        
+        return jsonify({
+            "results": results,
+            "total": len(results)
+        })
+    except Exception as e:
+        current_app.logger.error(f"Error fetching games: {e}")
+        return jsonify({"error": "Failed to fetch games"}), 500
+
+@bp.route('/api/stats/summary')
+def get_stats_summary():
+    """Return summary statistics about the data."""
+    try:
+        from datetime import date
+        
+        today = date.today()
+        
+        # Count various entities
+        total_teams = Team.query.count()
+        total_players = Player.query.count()
+        total_props = Prop.query.count()
+        total_games = Game.query.count()
+        
+        # Props today
+        props_today = Prop.query.filter_by(date=today).count()
+        
+        # Recent props
+        from datetime import timedelta
+        week_ago = today - timedelta(days=7)
+        props_this_week = Prop.query.filter(Prop.date >= week_ago).count()
+        
+        # Teams with most props - fix the JOIN query
+        team_prop_counts = db.session.query(
+            Team.name, Team.abbr, db.func.count(Prop.id).label('prop_count')
+        ).select_from(Team).join(Player, Team.id == Player.team_id).join(Prop, Player.id == Prop.player_id).group_by(Team.id, Team.name, Team.abbr).order_by(db.func.count(Prop.id).desc()).limit(5).all()
+        
+        return jsonify({
+            "totals": {
+                "teams": total_teams,
+                "players": total_players,
+                "props": total_props,
+                "games": total_games
+            },
+            "recent": {
+                "props_today": props_today,
+                "props_this_week": props_this_week
+            },
+            "top_teams_by_props": [
+                {
+                    "name": team.name,
+                    "abbr": team.abbr,
+                    "prop_count": team.prop_count
+                } for team in team_prop_counts
+            ]
+        })
+    except Exception as e:
+        current_app.logger.error(f"Error fetching stats summary: {e}")
+        return jsonify({"error": "Failed to fetch stats summary"}), 500
+
+# Global error handler for JSON errors
+@bp.app_errorhandler(500)
+def handle_500_error(error):
+    current_app.logger.error(f"Internal server error: {error}")
+    return jsonify({"error": "Internal server error"}), 500
 
