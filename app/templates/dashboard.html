@@ -1106,15 +1106,40 @@
             </div>
         </div>
         
-        <!-- Other sections placeholders -->
+        <!-- Games & Odds Section -->
         <div id="games-container" style="display: none;">
-            <h2>Games & Weather</h2>
-            <p>Coming soon...</p>
+            <div class="games-header">
+                <h2>Games & Weather</h2>
+                <div class="games-summary">
+                    <span id="games-count">Loading...</span> games with odds
+                </div>
+            </div>
+            
+            <div id="games-content">
+                <div class="loading-state">
+                    <div class="loading-spinner"></div>
+                    <h3>Loading Game Odds</h3>
+                    <p>Fetching odds from multiple sportsbooks...</p>
+                </div>
+            </div>
         </div>
         
+        <!-- Stat Leaders Section -->
         <div id="stats-container" style="display: none;">
-            <h2>Stat Leaders</h2>
-            <p>Coming soon...</p>
+            <div class="stat-leaders-header">
+                <h2>🏆 Stat Leaders</h2>
+                <div class="stat-leaders-summary">
+                    Current season individual and team leaders
+                </div>
+            </div>
+            
+            <div id="stat-leaders-content">
+                <div class="loading-state">
+                    <div class="loading-spinner"></div>
+                    <h3>Loading Stat Leaders</h3>
+                    <p>Fetching current season leaders...</p>
+                </div>
+            </div>
         </div>
     </div>
                     

@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request, render_template, current_app
 from app import db
-from app.models import Player, Prop, Game, Team, Stat, PlayerIDMap, Standing
+from app.models import Player, Prop, Game, Team, Stat, PlayerIDMap, Standing, GameOdds, StatLeader, TeamStatLeader
 from app.utils import log_api_call, handle_database_error, validate_integer_input, validate_string_input
 from sqlalchemy.exc import SQLAlchemyError
 from typing import Optional, Dict, Any
@@ -540,6 +540,234 @@ def get_stats_summary():
     except Exception as e:
         current_app.logger.error(f"Error fetching stats summary: {e}")
         return jsonify({"error": "Failed to fetch stats summary"}), 500
+
+@bp.route('/api/game-odds')
+@log_api_call
+def get_game_odds():
+    """Get game odds for upcoming games from multiple bookmakers."""
+    try:
+        from datetime import date, timedelta
+        
+        # Get date filter from request
+        date_filter = request.args.get('date_filter', 'upcoming')
+        today = date.today()
+        tomorrow = today + timedelta(days=1)
+        
+        # Build date filter
+        if date_filter == 'today':
+            date_conditions = [GameOdds.date == today]
+        elif date_filter == 'tomorrow':
+            date_conditions = [GameOdds.date == tomorrow] 
+        else:  # 'upcoming' - default
+            date_conditions = [GameOdds.date.in_([today, tomorrow])]
+        
+        # Query odds
+        odds_query = GameOdds.query.filter(*date_conditions).order_by(
+            GameOdds.date.asc(),
+            GameOdds.commence_time.asc(),
+            GameOdds.bookmaker.asc()
+        )
+        
+        all_odds = odds_query.all()
+        
+        # Group odds by game
+        games_dict = {}
+        for odd in all_odds:
+            game_key = f"{odd.game_id}"
+            
+            if game_key not in games_dict:
+                games_dict[game_key] = {
+                    'game_id': odd.game_id,
+                    'date': odd.date.isoformat(),
+                    'commence_time': odd.commence_time.isoformat(),
+                    'home_team': odd.home_team,
+                    'away_team': odd.away_team,
+                    'bookmakers': {}
+                }
+            
+            games_dict[game_key]['bookmakers'][odd.bookmaker] = {
+                'home_odds': odd.home_odds,
+                'away_odds': odd.away_odds,
+                'last_update': odd.last_update.isoformat()
+            }
+        
+        # Convert to list and ensure we have the target bookmakers
+        games = []
+        target_bookmakers = ['fanduel', 'draftkings', 'betmgm']
+        
+        for game_data in games_dict.values():
+            # Only include games that have at least 2 of our target bookmakers
+            available_books = [book for book in target_bookmakers 
+                             if book in game_data['bookmakers']]
+            
+            if len(available_books) >= 2:
+                games.append(game_data)
+        
+        return jsonify({
+            "games": games,
+            "total": len(games),
+            "date_filter": date_filter
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in game-odds endpoint: {e}")
+        return jsonify({"error": "Failed to fetch game odds"}), 500
+
+@bp.route('/api/stat-leaders/individual')
+@log_api_call
+@handle_database_error
+def get_individual_stat_leaders():
+    """Return individual player stat leaders."""
+    try:
+        # Get query parameters
+        category = request.args.get('category', 'homeRuns')
+        limit = validate_integer_input(
+            request.args.get('limit', 10), 
+            min_val=1, 
+            max_val=50,
+            field_name="limit"
+        )
+        season = request.args.get('season', '2025')
+        
+        # Fetch stat leaders
+        leaders = StatLeader.query.filter_by(
+            season=season,
+            category=category
+        ).order_by(StatLeader.rank.asc()).limit(limit).all()
+        
+        results = []
+        for leader in leaders:
+            # Get ESPN ID for headshot
+            espn_id = get_espn_id_from_map(leader.player_id)
+            
+            results.append({
+                "rank": leader.rank,
+                "player_id": leader.player_id,
+                "player_name": leader.player_name,
+                "team_id": leader.team_id,
+                "team_name": leader.team_name,
+                "value": leader.value,
+                "category": leader.category,
+                "season": leader.season,
+                "headshot": get_headshot(leader.player_id),
+                "team_logo": f"/static/team_logos/{leader.team_id}.svg" if leader.team_id else None
+            })
+        
+        return jsonify({
+            "results": results,
+            "category": category,
+            "season": season,
+            "total": len(results)
+        })
+        
+    except ValueError as e:
+        current_app.logger.warning(f"Input validation error in get_individual_stat_leaders: {str(e)}")
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        current_app.logger.error(f"Error fetching individual stat leaders: {e}")
+        return jsonify({"error": "Failed to fetch stat leaders"}), 500
+
+@bp.route('/api/stat-leaders/teams')
+@log_api_call
+@handle_database_error
+def get_team_stat_leaders():
+    """Return team stat leaders."""
+    try:
+        # Get query parameters
+        category = request.args.get('category', 'teamBattingAverage')
+        limit = validate_integer_input(
+            request.args.get('limit', 10), 
+            min_val=1, 
+            max_val=30,
+            field_name="limit"
+        )
+        season = request.args.get('season', '2025')
+        
+        # Fetch team stat leaders
+        leaders = TeamStatLeader.query.filter_by(
+            season=season,
+            category=category
+        ).order_by(TeamStatLeader.rank.asc()).limit(limit).all()
+        
+        results = []
+        for leader in leaders:
+            results.append({
+                "rank": leader.rank,
+                "team_id": leader.team_id,
+                "team_name": leader.team_name,
+                "value": leader.value,
+                "category": leader.category,
+                "stat_type": leader.stat_type,
+                "season": leader.season,
+                "team_logo": f"/static/team_logos/{leader.team_id}.svg"
+            })
+        
+        return jsonify({
+            "results": results,
+            "category": category,
+            "season": season,
+            "total": len(results)
+        })
+        
+    except ValueError as e:
+        current_app.logger.warning(f"Input validation error in get_team_stat_leaders: {str(e)}")
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        current_app.logger.error(f"Error fetching team stat leaders: {e}")
+        return jsonify({"error": "Failed to fetch team stat leaders"}), 500
+
+@bp.route('/api/stat-leaders/categories')
+def get_stat_leader_categories():
+    """Get available stat categories for both individual and team leaders."""
+    
+    # Batting categories (for position players)
+    batting_categories = [
+        {'category': 'homeRuns', 'display_name': 'Home Runs'},
+        {'category': 'rbi', 'display_name': 'RBIs'},
+        {'category': 'hits', 'display_name': 'Hits'},
+        {'category': 'battingAverage', 'display_name': 'Batting Average'},
+        {'category': 'onBasePlusSlugging', 'display_name': 'OPS'},
+        {'category': 'sluggingPercentage', 'display_name': 'Slugging %'},
+        {'category': 'onBasePercentage', 'display_name': 'On-Base %'},
+        {'category': 'stolenBases', 'display_name': 'Stolen Bases'},
+        {'category': 'runs', 'display_name': 'Runs'},
+        {'category': 'doubles', 'display_name': 'Doubles'},
+        {'category': 'triples', 'display_name': 'Triples'}
+    ]
+    
+    # Pitching categories (for pitchers)
+    pitching_categories = [
+        {'category': 'era', 'display_name': 'ERA'},
+        {'category': 'wins', 'display_name': 'Wins'},
+        {'category': 'strikeouts', 'display_name': 'Strikeouts'},
+        {'category': 'whip', 'display_name': 'WHIP'},
+        {'category': 'saves', 'display_name': 'Saves'},
+        {'category': 'holds', 'display_name': 'Holds'},
+        {'category': 'qualityStarts', 'display_name': 'Quality Starts'}
+    ]
+    
+    # Team categories
+    team_categories = [
+        {'category': 'teamBattingAverage', 'display_name': 'Team Batting Average'},
+        {'category': 'teamHomeRuns', 'display_name': 'Team Home Runs'},
+        {'category': 'teamRBI', 'display_name': 'Team RBIs'},
+        {'category': 'teamRuns', 'display_name': 'Team Runs'},
+        {'category': 'teamHits', 'display_name': 'Team Hits'},
+        {'category': 'teamSluggingPercentage', 'display_name': 'Team Slugging %'},
+        {'category': 'teamOnBasePercentage', 'display_name': 'Team On-Base %'},
+        {'category': 'teamOPS', 'display_name': 'Team OPS'},
+        {'category': 'teamERA', 'display_name': 'Team ERA'},
+        {'category': 'teamWHIP', 'display_name': 'Team WHIP'},
+        {'category': 'teamStrikeouts', 'display_name': 'Team Strikeouts'},
+        {'category': 'teamSaves', 'display_name': 'Team Saves'},
+        {'category': 'teamWins', 'display_name': 'Team Wins'}
+    ]
+    
+    return jsonify({
+        'batting': batting_categories,
+        'pitching': pitching_categories,
+        'team': team_categories
+    })
 
 # Global error handler for JSON errors
 @bp.app_errorhandler(500)

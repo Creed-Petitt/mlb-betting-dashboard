@@ -134,3 +134,53 @@ class Standing(db.Model):
     # Unique constraint on team and date
     __table_args__ = (db.UniqueConstraint('team_id', 'last_updated'),)
 
+class GameOdds(db.Model):
+    """Represents odds for MLB games from different bookmakers."""
+    __tablename__ = 'game_odds'
+    id = db.Column(db.Integer, primary_key=True)
+    game_id = db.Column(db.String(64), nullable=False)  # From OddsAPI
+    date = db.Column(db.Date, nullable=False)
+    commence_time = db.Column(db.DateTime, nullable=False)
+    home_team = db.Column(db.String(100), nullable=False)
+    away_team = db.Column(db.String(100), nullable=False)
+    bookmaker = db.Column(db.String(50), nullable=False)  # 'fanduel', 'draftkings', 'betmgm'
+    home_odds = db.Column(db.Integer, nullable=False)  # American odds format
+    away_odds = db.Column(db.Integer, nullable=False)  # American odds format
+    last_update = db.Column(db.DateTime, nullable=False)
+    
+    # Unique constraint to prevent duplicate odds for same game/bookmaker
+    __table_args__ = (db.UniqueConstraint('game_id', 'bookmaker', name='unique_game_bookmaker'),)
+
+class StatLeader(db.Model):
+    """Represents individual player stat leaders."""
+    __tablename__ = 'stat_leaders'
+    id = db.Column(db.Integer, primary_key=True)
+    season = db.Column(db.String(4), nullable=False)  # "2025"
+    category = db.Column(db.String(50), nullable=False)  # "homeRuns", "battingAverage", "era"
+    player_id = db.Column(db.Integer, nullable=False)  # MLB player ID
+    player_name = db.Column(db.String(100), nullable=False)
+    team_id = db.Column(db.Integer, nullable=True)
+    team_name = db.Column(db.String(100), nullable=True)
+    value = db.Column(db.String(20), nullable=False)  # Store as string to handle decimals
+    rank = db.Column(db.Integer, nullable=False)
+    last_updated = db.Column(db.Date, nullable=False)
+    
+    # Unique constraint for season/category/player
+    __table_args__ = (db.UniqueConstraint('season', 'category', 'player_id', name='unique_stat_leader'),)
+
+class TeamStatLeader(db.Model):
+    """Represents team stat leaders."""
+    __tablename__ = 'team_stat_leaders'
+    id = db.Column(db.Integer, primary_key=True)
+    season = db.Column(db.String(4), nullable=False)  # "2025"
+    category = db.Column(db.String(50), nullable=False)  # "teamBattingAverage", "teamERA"
+    stat_type = db.Column(db.String(20), nullable=False)  # "hitting" or "pitching"
+    team_id = db.Column(db.Integer, nullable=False)
+    team_name = db.Column(db.String(100), nullable=False)
+    value = db.Column(db.String(20), nullable=False)  # Store as string to handle decimals
+    rank = db.Column(db.Integer, nullable=False)
+    last_updated = db.Column(db.Date, nullable=False)
+    
+    # Unique constraint for season/category/team
+    __table_args__ = (db.UniqueConstraint('season', 'category', 'team_id', name='unique_team_stat_leader'),)
+

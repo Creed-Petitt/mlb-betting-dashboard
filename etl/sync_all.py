@@ -68,6 +68,10 @@ def main():
     subprocess.run([sys.executable, 'etl/fetch_stats.py'])
     # Step 8: fetch current standings
     subprocess.run([sys.executable, 'etl/fetch_standings.py'])
+    # Step 7: Fetch game odds
+    subprocess.run([sys.executable, 'etl/fetch_game_odds.py'])
+    # Step 8: Fetch stat leaders  
+    subprocess.run([sys.executable, 'etl/fetch_stat_leaders.py'])
 
 if __name__ == "__main__":
     main()

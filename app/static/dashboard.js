@@ -821,6 +821,10 @@ function switchSection(section) {
         // Load data for the section if needed
         if (section === 'standings' && !standingsData) {
             loadStandings();
+        } else if (section === 'games') {
+            loadGames();
+        } else if (section === 'stats') {
+            loadStatLeaders();
         }
     }
 }
@@ -1045,4 +1049,465 @@ function renderPlayoffPicture(container) {
     
     html += '</div>';
     container.innerHTML = html;
-} 
+}
+
+// Load game odds
+async function loadGames() {
+    try {
+        showGamesLoading(true);
+        
+        const response = await fetch('/api/game-odds?date_filter=upcoming');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        renderGames(data.games);
+        updateGamesCount(data.total);
+        
+    } catch (error) {
+        console.error('Error loading games:', error);
+        showGamesError('Unable to fetch game odds. Please try again later.');
+    } finally {
+        showGamesLoading(false);
+    }
+}
+
+function renderGames(games) {
+    const container = document.getElementById('games-content');
+    if (!container) return;
+    
+    if (!games || games.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <h3>No Games Available</h3>
+                <p>No upcoming games with odds found.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '';
+    games.forEach(game => {
+        html += createGameCard(game);
+    });
+    
+    container.innerHTML = html;
+}
+
+function createGameCard(game) {
+    // Convert from Eastern to Central time (subtract 1 hour)
+    const gameTimeEST = new Date(game.commence_time);
+    const gameTimeCST = new Date(gameTimeEST.getTime() - (1 * 60 * 60 * 1000));
+    
+    const gameTime = gameTimeCST.toLocaleString('en-US', {
+        weekday: 'short',
+        month: 'short', 
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'America/Chicago'
+    });
+    
+    // Build bookmaker odds
+    let oddsHtml = '';
+    const bookmakerOrder = ['fanduel', 'draftkings', 'betmgm'];
+    
+    bookmakerOrder.forEach(bookmaker => {
+        if (game.bookmakers[bookmaker]) {
+            const odds = game.bookmakers[bookmaker];
+            oddsHtml += `
+                <div class="bookmaker-odds">
+                    <div class="bookmaker-name">${formatBookmakerName(bookmaker)}</div>
+                    <div class="odds-row">
+                        <div class="team-odds">
+                            <span class="team-name-small">${game.away_team}</span>
+                            <span class="odds-value ${odds.away_odds > 0 ? 'positive' : 'negative'}">
+                                ${formatOdds(odds.away_odds)}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="odds-row">
+                        <div class="team-odds">
+                            <span class="team-name-small">${game.home_team}</span>
+                            <span class="odds-value ${odds.home_odds > 0 ? 'positive' : 'negative'}">
+                                ${formatOdds(odds.home_odds)}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    });
+    
+    return `
+        <div class="game-card">
+            <div class="game-header">
+                <div class="game-matchup">
+                    <span class="team-name">${game.away_team}</span>
+                    <span class="game-vs">@</span>
+                    <span class="team-name">${game.home_team}</span>
+                </div>
+                <div class="game-time">${gameTime}</div>
+            </div>
+            <div class="odds-grid">
+                ${oddsHtml}
+            </div>
+        </div>
+    `;
+}
+
+function formatBookmakerName(bookmaker) {
+    const names = {
+        'fanduel': 'FanDuel',
+        'draftkings': 'DraftKings', 
+        'betmgm': 'BetMGM'
+    };
+    return names[bookmaker] || bookmaker;
+}
+
+function formatOdds(odds) {
+    return odds > 0 ? `+${odds}` : `${odds}`;
+}
+
+function updateGamesCount(count) {
+    const countElement = document.getElementById('games-count');
+    if (countElement) {
+        countElement.textContent = count;
+    }
+}
+
+function showGamesLoading(show) {
+    const container = document.getElementById('games-content');
+    if (!container) return;
+    
+    if (show) {
+        container.innerHTML = `
+            <div class="loading-state">
+                <div class="loading-spinner"></div>
+                <h3>Loading Game Odds</h3>
+                <p>Fetching odds from multiple sportsbooks...</p>
+            </div>
+        `;
+    }
+}
+
+function showGamesError(message) {
+    const container = document.getElementById('games-content');
+    if (container) {
+        container.innerHTML = `
+            <div class="error-state">
+                <h3>Error Loading Games</h3>
+                <p>${message}</p>
+            </div>
+        `;
+    }
+}
+
+// Stat Leaders functionality
+let statLeadersData = { individual: [], team: [], categories: [] };
+
+function loadStatLeaders() {
+    console.log('Loading stat leaders...');
+    
+    // Load categories first
+    fetch('/api/stat-leaders/categories')
+        .then(response => response.json())
+        .then(data => {
+            statLeadersData.categories = data;
+            setupStatLeadersInterface();
+            
+            // Load default data (individual stats)
+            loadIndividualLeaders('homeRuns');
+        })
+        .catch(error => {
+            console.error('Error loading stat leader categories:', error);
+            showStatLeadersError('Failed to load categories');
+        });
+}
+
+function setupStatLeadersInterface() {
+    const container = document.getElementById('stat-leaders-content');
+    
+    const html = `
+        <div class="stat-leaders-header">
+            <h2>📊 Stat Leaders</h2>
+            <div class="stat-leaders-summary">Current season leaders - Batters, Pitchers, and Teams</div>
+        </div>
+        
+        <div class="stat-leaders-controls">
+            <div class="stat-leaders-toggle">
+                <button id="batters-toggle" class="toggle-btn active" onclick="switchStatType('batters')">
+                    🏏 Batters
+                </button>
+                <button id="pitchers-toggle" class="toggle-btn" onclick="switchStatType('pitchers')">
+                    ⚾ Pitchers
+                </button>
+                <button id="teams-toggle" class="toggle-btn" onclick="switchStatType('teams')">
+                    🏟️ Teams
+                </button>
+            </div>
+            
+            <div class="stat-controls">
+                <select id="category-select" class="category-select">
+                    ${statLeadersData.categories.batting?.map(cat => 
+                        `<option value="${cat.category}">${cat.display_name}</option>`
+                    ).join('') || ''}
+                </select>
+                <select id="limit-select" class="limit-select">
+                    <option value="10">Top 10</option>
+                    <option value="25" selected>Top 25</option>
+                    <option value="50">Top 50</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="stat-leaders-results" class="stat-leaders-results">
+            <div class="loading">Loading stat leaders...</div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+    
+    // Add event listeners
+    document.getElementById('category-select').addEventListener('change', (e) => {
+        const limit = document.getElementById('limit-select').value;
+        const currentType = getCurrentStatType();
+        
+        loadCurrentStatType(currentType, e.target.value, parseInt(limit));
+    });
+    
+    document.getElementById('limit-select').addEventListener('change', (e) => {
+        const category = document.getElementById('category-select').value;
+        const currentType = getCurrentStatType();
+        
+        loadCurrentStatType(currentType, category, parseInt(e.target.value));
+    });
+}
+
+function getCurrentStatType() {
+    const activeToggle = document.querySelector('.toggle-btn.active');
+    if (activeToggle.id === 'batters-toggle') return 'batters';
+    if (activeToggle.id === 'pitchers-toggle') return 'pitchers';
+    if (activeToggle.id === 'teams-toggle') return 'teams';
+    return 'batters';
+}
+
+function loadCurrentStatType(type, category, limit) {
+    if (type === 'batters' || type === 'pitchers') {
+        loadIndividualLeaders(category, limit);
+    } else if (type === 'teams') {
+        loadTeamLeaders(category, limit);
+    }
+}
+
+// Make switchStatType available globally
+window.switchStatType = function(type) {
+    console.log(`[DEBUG] Switching to ${type} stat type`);
+    
+    // Update toggle buttons
+    document.querySelectorAll('.toggle-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(`${type}-toggle`).classList.add('active');
+    
+    // Update category dropdown
+    const categorySelect = document.getElementById('category-select');
+    let categories;
+    
+    if (type === 'batters') {
+        categories = statLeadersData.categories.batting;
+    } else if (type === 'pitchers') {
+        categories = statLeadersData.categories.pitching;
+    } else if (type === 'teams') {
+        categories = statLeadersData.categories.team;
+    }
+    
+    console.log(`[DEBUG] Categories for ${type}:`, categories);
+    
+    categorySelect.innerHTML = categories?.map(cat => 
+        `<option value=\"${cat.category}\">${cat.display_name}</option>`
+    ).join('') || '';
+    
+    // Update limit options based on type
+    const limitSelect = document.getElementById('limit-select');
+    if (type === 'teams') {
+        limitSelect.innerHTML = `
+            <option value=\"10\" selected>Top 10</option>
+            <option value=\"15\">Top 15</option>
+            <option value=\"30\">All Teams</option>
+        `;
+    } else {
+        limitSelect.innerHTML = `
+            <option value=\"10\">Top 10</option>
+            <option value=\"25\" selected>Top 25</option>
+            <option value=\"50\">Top 50</option>
+        `;
+    }
+    
+    // Load data for the selected type
+    const category = categorySelect.value;
+    const limit = parseInt(limitSelect.value);
+    
+    console.log(`[DEBUG] Loading ${type} data: category=${category}, limit=${limit}`);
+    
+    loadCurrentStatType(type, category, limit);
+};
+
+function loadIndividualLeaders(category = 'homeRuns', limit = 25) {
+    const container = document.getElementById('stat-leaders-results');
+    container.innerHTML = '<div class="loading">Loading individual leaders...</div>';
+    
+    console.log(`[DEBUG] Loading individual leaders: category=${category}, limit=${limit}`);
+    
+    fetch(`/api/stat-leaders/individual?category=${category}&limit=${limit}`)
+        .then(response => {
+            console.log(`[DEBUG] Response status: ${response.status}`);
+            return response.json();
+        })
+        .then(data => {
+            console.log(`[DEBUG] Received data:`, data);
+            console.log(`[DEBUG] Results count: ${data.results?.length || 0}`);
+            
+            statLeadersData.individual = data.results;
+            renderIndividualLeaders(data.results, category);
+        })
+        .catch(error => {
+            console.error('Error loading individual leaders:', error);
+            container.innerHTML = '<div class="error">Failed to load individual leaders</div>';
+        });
+}
+
+function loadTeamLeaders(category = 'teamBattingAverage', limit = 10) {
+    const container = document.getElementById('stat-leaders-results');
+    container.innerHTML = '<div class="loading">Loading team leaders...</div>';
+    
+    fetch(`/api/stat-leaders/teams?category=${category}&limit=${limit}`)
+        .then(response => response.json())
+        .then(data => {
+            statLeadersData.team = data.results;
+            renderTeamLeaders(data.results, category);
+        })
+        .catch(error => {
+            console.error('Error loading team leaders:', error);
+            container.innerHTML = '<div class="error">Failed to load team leaders</div>';
+        });
+}
+
+function renderIndividualLeaders(leaders, category) {
+    const container = document.getElementById('stat-leaders-results');
+    
+    if (!leaders || leaders.length === 0) {
+        container.innerHTML = '<div class="no-data">No individual leaders found</div>';
+        return;
+    }
+    
+    let html = '<div class="leaders-grid individual-leaders-grid">';
+    
+    leaders.forEach((leader, index) => {
+        const valueFormatted = formatStatLeaderValue(leader.value, category);
+        
+        html += `
+            <div class="leader-card">
+                <div class="leader-rank">#${leader.rank}</div>
+                <div class="leader-player-info">
+                    <img class="leader-headshot" 
+                         src="${leader.headshot || '/static/headshots/placeholder.png'}" 
+                         alt="${leader.player_name}"
+                         onerror="this.src='/static/headshots/placeholder.png'">
+                    <div class="leader-player-details">
+                        <div class="leader-player-name">${leader.player_name}</div>
+                        <div class="leader-team-info">
+                            <img class="leader-team-logo" 
+                                 src="${leader.team_logo || ''}" 
+                                 alt="${leader.team_name || ''}"
+                                 onerror="this.style.display='none'">
+                            <span class="leader-team-name">${leader.team_name || 'Free Agent'}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="leader-stat-value">${valueFormatted}</div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function renderTeamLeaders(leaders, category) {
+    const container = document.getElementById('stat-leaders-results');
+    
+    if (!leaders || leaders.length === 0) {
+        container.innerHTML = '<div class="no-data">No team leaders found</div>';
+        return;
+    }
+    
+    let html = '<div class="leaders-grid team-leaders-grid">';
+    
+    leaders.forEach((leader, index) => {
+        const valueFormatted = formatStatLeaderValue(leader.value, category);
+        
+        html += `
+            <div class="leader-card team-leader-card">
+                <div class="leader-rank">#${leader.rank}</div>
+                <div class="leader-team-info-full">
+                    <img class="leader-team-logo-large" 
+                         src="${leader.team_logo}" 
+                         alt="${leader.team_name}"
+                         onerror="this.style.display='none'">
+                    <div class="leader-team-name">${leader.team_name}</div>
+                </div>
+                <div class="leader-stat-value">${valueFormatted}</div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function formatStatLeaderValue(value, category) {
+    if (!value || value === '') return '-';
+    
+    const num = parseFloat(value);
+    if (isNaN(num)) return value;
+    
+    // Handle percentage stats that should show full decimal
+    if (['battingAverage', 'teamBattingAverage', 'onBasePercentage', 'teamOnBasePercentage', 
+         'sluggingPercentage', 'teamSluggingPercentage'].includes(category)) {
+        if (num < 1) {
+            return num.toFixed(3).substring(1); // Remove leading 0: .290
+        }
+        return num.toFixed(3);
+    }
+    
+    // Handle ERA and WHIP
+    if (['era', 'teamERA', 'whip', 'teamWHIP'].includes(category)) {
+        return num.toFixed(2);
+    }
+    
+    // Handle OPS
+    if (['onBasePlusSlugging', 'teamOPS'].includes(category)) {
+        return num.toFixed(3);
+    }
+    
+    // Handle counting stats (whole numbers)
+    if (['homeRuns', 'teamHomeRuns', 'rbi', 'teamRBI', 'hits', 'teamHits', 'runs', 'teamRuns',
+         'wins', 'teamWins', 'strikeouts', 'teamStrikeouts', 'saves', 'teamSaves', 
+         'stolenBases', 'doubles', 'triples'].includes(category)) {
+        return Math.round(num).toString();
+    }
+    
+    // Default formatting
+    return num.toString();
+}
+
+function showStatLeadersError(message) {
+    const container = document.getElementById('stat-leaders-content');
+    container.innerHTML = `<div class="error-message">${message}</div>`;
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadInitialData();
+}); 
