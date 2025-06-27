@@ -134,13 +134,15 @@ def pull_fanduel_props():
         category = target_markets[market_type]
         print(f"✅ Found {category} market: {market_type} #{markets_found[market_type]} → '{prop_type}'")
 
-        # Get game date
+        # Get game date with improved logging
         game_date = event_id_to_date.get(event_id)
         if not game_date:
             game_date = competition_id_to_date.get(competition_id)
         if not game_date:
             game_date = date.today()  # fallback
-            print(f"[DEBUG] No game_date found, using today as fallback")
+            print(f"[DEBUG] ⚠️  No game_date found for eventId={event_id}, competitionId={competition_id}, using TODAY ({game_date}) as fallback")
+        else:
+            print(f"[DEBUG] ✅ Found game_date: {game_date} for eventId={event_id}")
 
         runners = m.get("runners", [])
         print(f"📝 Processing {len(runners)} runners for {market_type}")
@@ -191,7 +193,24 @@ def pull_fanduel_props():
         total_markets += count
     
     db.session.commit()
-    print(f"\n🎉 Added {new_props} props from {total_markets} markets total!")
+    
+    # Show current date breakdown
+    print(f"\n📅 CURRENT PROPS BY DATE:")
+    from sqlalchemy import text
+    result = db.session.execute(text("SELECT date, COUNT(*) as count FROM props GROUP BY date ORDER BY date DESC LIMIT 7"))
+    today = date.today()
+    tomorrow = today + timedelta(days=1)
+    
+    for row in result:
+        prop_date, count = row
+        date_label = ""
+        if str(prop_date) == str(today):
+            date_label = " (TODAY)"
+        elif str(prop_date) == str(tomorrow):
+            date_label = " (TOMORROW)"
+        print(f"   {prop_date}{date_label}: {count} props")
+    
+    print(f"\n🎉 Added {new_props} NEW props from {total_markets} markets total!")
 
 def main():
     """Main function with error handling to prevent crashes."""

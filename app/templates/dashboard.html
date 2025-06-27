@@ -1044,6 +1044,15 @@
                 </div>
                 
                 <div class="d-flex align-items-center">
+                    <span class="filter-label">Date</span>
+                    <select class="form-select" id="date-filter">
+                        <option value="upcoming">Today + Tomorrow</option>
+                        <option value="today">Today Only</option>
+                        <option value="tomorrow">Tomorrow Only</option>
+                    </select>
+                </div>
+                
+                <div class="d-flex align-items-center">
                     <span class="filter-label">Teams</span>
                     <select class="form-select" id="team-filter">
                         <option value="">All Teams</option>
@@ -1059,6 +1068,7 @@
         <div class="props-summary-bar">
             <div class="summary-text">
                 <span class="summary-count" id="props-count">Loading...</span> player props available
+                <span class="summary-filter" id="props-filter-info" style="font-size: 0.75rem; color: #64748b; margin-left: 0.5rem;"></span>
                         </div>
             <div class="summary-text">
                 FanDuel Sportsbook

@@ -113,3 +113,24 @@ class PlayerIDMap(db.Model):
     espn_id = db.Column(db.Integer, nullable=True)
     # Might add more (baseball_ref_id, retrosheet_id, etc)
 
+class Standing(db.Model):
+    """Represents team standings for a given date."""
+    __tablename__ = 'standings'
+    id = db.Column(db.Integer, primary_key=True)
+    team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
+    team_name = db.Column(db.String(64), nullable=False)
+    team_abbr = db.Column(db.String(8), nullable=False)
+    division = db.Column(db.String(32), nullable=False)
+    league = db.Column(db.String(8), nullable=False)
+    wins = db.Column(db.Integer, nullable=False)
+    losses = db.Column(db.Integer, nullable=False)
+    winning_pct = db.Column(db.Float, nullable=False)
+    games_behind = db.Column(db.Float, nullable=False)
+    streak = db.Column(db.String(16), nullable=True)
+    division_rank = db.Column(db.Integer, nullable=False)
+    league_rank = db.Column(db.Integer, nullable=False)
+    wildcard_rank = db.Column(db.Integer, nullable=True)
+    last_updated = db.Column(db.Date, nullable=False)
+    # Unique constraint on team and date
+    __table_args__ = (db.UniqueConstraint('team_id', 'last_updated'),)
+

@@ -4,7 +4,8 @@ let selectedPropId = null;
 let currentFilters = {
     team: '',
     propType: '',
-    game: ''
+    game: '',
+    date: 'upcoming'
 };
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -51,7 +52,9 @@ async function loadTeams() {
 
 async function loadProps() {
     try {
-        const response = await fetch('/api/props?per_page=1000');
+        // Use current date filter
+        const dateFilter = currentFilters.date || 'upcoming';
+        const response = await fetch(`/api/props?per_page=1000&date_filter=${dateFilter}`);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -134,7 +137,7 @@ function createPropCard(prop) {
                  onerror="this.style.display='none'">
         </div>
         
-        <div class="prop-type">${formatPropType(prop.prop_type)}</div>
+        <div class="prop-type">${formatPropType(prop.prop_type)} • ${formatPropDate(prop.date)}</div>
         
         <div class="prop-line-section">
             <div class="prop-line-display">
@@ -184,6 +187,30 @@ function formatAmericanOdds(odds) {
     
     // If positive, add + sign, if negative, already has - sign
     return numericOdds > 0 ? `+${numericOdds}` : `${numericOdds}`;
+}
+
+function formatPropDate(dateStr) {
+    if (!dateStr) return 'Unknown Date';
+    
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const propDate = new Date(dateStr);
+    
+    // Format as YYYY-MM-DD for comparison
+    const todayStr = today.toISOString().split('T')[0];
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    const propDateStr = propDate.toISOString().split('T')[0];
+    
+    if (propDateStr === todayStr) {
+        return 'Today';
+    } else if (propDateStr === tomorrowStr) {
+        return 'Tomorrow';
+    } else {
+        // Format as MM/DD
+        return `${propDate.getMonth() + 1}/${propDate.getDate()}`;
+    }
 }
 
 function selectProp(cardElement, prop) {
@@ -665,6 +692,24 @@ function initializeFilters() {
     if (propTypeSelect) {
         propTypeSelect.addEventListener('change', applyFilters);
     }
+    
+    // Add date filter listener
+    const dateSelect = document.getElementById('date-filter');
+    if (dateSelect) {
+        dateSelect.addEventListener('change', async function() {
+            currentFilters.date = this.value;
+            showLoading(true);
+            try {
+                await loadProps();
+                applyFilters();
+            } catch (error) {
+                console.error('Error reloading props:', error);
+                showError('Failed to reload props for selected date.');
+            } finally {
+                showLoading(false);
+            }
+        });
+    }
 }
 
 function applyFilters() {
@@ -691,6 +736,18 @@ function updatePropsCount(count) {
     const countElement = document.getElementById('props-count');
     if (countElement) {
         countElement.textContent = count;
+    }
+    
+    // Update filter info
+    const filterInfo = document.getElementById('props-filter-info');
+    if (filterInfo) {
+        const dateFilter = currentFilters.date || 'upcoming';
+        const filterLabels = {
+            'upcoming': '(Today + Tomorrow)',
+            'today': '(Today Only)',
+            'tomorrow': '(Tomorrow Only)'
+        };
+        filterInfo.textContent = filterLabels[dateFilter] || '';
     }
 }
 

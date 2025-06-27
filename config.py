@@ -16,11 +16,16 @@ class Config:
     
     # Database Connection Pooling for resilience
     SQLALCHEMY_ENGINE_OPTIONS = {
-        'pool_size': int(os.environ.get('SQLALCHEMY_ENGINE_OPTIONS_POOL_SIZE', 10)),
+        'pool_size': int(os.environ.get('SQLALCHEMY_ENGINE_OPTIONS_POOL_SIZE', 5)),
         'pool_timeout': int(os.environ.get('SQLALCHEMY_ENGINE_OPTIONS_POOL_TIMEOUT', 20)),
         'pool_recycle': int(os.environ.get('SQLALCHEMY_ENGINE_OPTIONS_POOL_RECYCLE', 3600)),
-        'max_overflow': int(os.environ.get('SQLALCHEMY_ENGINE_OPTIONS_MAX_OVERFLOW', 20)),
-        'pool_pre_ping': True  # Validates connections before use
+        'max_overflow': int(os.environ.get('SQLALCHEMY_ENGINE_OPTIONS_MAX_OVERFLOW', 5)),
+        'pool_pre_ping': True,  # Validates connections before use
+        'connect_args': {
+            'timeout': 30,
+            'check_same_thread': False,
+            'isolation_level': None  # Use autocommit mode to reduce lock contention
+        }
     }
     
     # Security Configuration

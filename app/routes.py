@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request, render_template, current_app
 from app import db
-from app.models import Player, Prop, Game, Team, Stat, PlayerIDMap
+from app.models import Player, Prop, Game, Team, Stat, PlayerIDMap, Standing
 from app.utils import log_api_call, handle_database_error, validate_integer_input, validate_string_input
 from sqlalchemy.exc import SQLAlchemyError
 from typing import Optional, Dict, Any
@@ -88,14 +88,27 @@ def get_props():
             field_name="per_page"
         )
         
-        # Show props for today and tomorrow (upcoming games)
+        # Get date filter from request, default to today and tomorrow
+        date_filter = request.args.get('date_filter', 'upcoming')  # 'today', 'tomorrow', 'upcoming', 'all'
         today = date.today()
         tomorrow = today + timedelta(days=1)
         
-        # Base query for TODAY and TOMORROW
-        props_query = Prop.query.filter(
-            (Prop.date == today) | (Prop.date == tomorrow)
-        ).order_by(Prop.date.asc(), Prop.odds.desc())
+        # Apply date filter
+        if date_filter == 'today':
+            props_query = Prop.query.filter(Prop.date == today)
+        elif date_filter == 'tomorrow':
+            props_query = Prop.query.filter(Prop.date == tomorrow)
+        elif date_filter == 'upcoming':
+            # Show props for today and tomorrow (upcoming games)
+            props_query = Prop.query.filter(
+                (Prop.date == today) | (Prop.date == tomorrow)
+            )
+        else:  # 'all' or any other value
+            # Show last 7 days of props
+            week_ago = today - timedelta(days=7)
+            props_query = Prop.query.filter(Prop.date >= week_ago)
+        
+        props_query = props_query.order_by(Prop.date.asc(), Prop.odds.desc())
         
         # Add team filter if specified
         if team_id:

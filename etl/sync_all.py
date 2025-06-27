@@ -48,6 +48,10 @@ def download_headshots():
                     print(f"[WARN] Failed to download headshot for {espn_id}")
 
 def main():
+    # Step 0: Create backup before sync
+    print("[SYNC] Creating database backup...")
+    subprocess.run([sys.executable, 'etl/backup_db.py'])
+    
     # Step 1: import mapping
     subprocess.run([sys.executable, 'etl/import_player_id_map.py'])
     # Step 2: fetch games (creates teams)

@@ -42,14 +42,37 @@ PITCHER_STATS_MAP = {
 }
 
 def get_relevant_player_ids():
-    hitter_ids = set(pid for (pid,) in db.session.query(Prop.player_id).distinct())
+    """Get only players we actually need stats for: players with props + starting pitchers in upcoming games."""
+    from datetime import date, timedelta
+    
+    # Get players with props (only for today and tomorrow)
+    today = date.today()
+    tomorrow = today + timedelta(days=1)
+    
+    hitter_ids = set(pid for (pid,) in db.session.query(Prop.player_id).filter(
+        (Prop.date == today) | (Prop.date == tomorrow)
+    ).distinct())
+    
+    print(f"Found {len(hitter_ids)} players with props for today/tomorrow")
+    
+    # Get starting pitchers for upcoming games (today and tomorrow only)
     pitcher_ids = set()
-    for game in db.session.query(Game).all():
+    upcoming_games = db.session.query(Game).filter(
+        (Game.date == today) | (Game.date == tomorrow)
+    ).all()
+    
+    for game in upcoming_games:
         if game.home_pitcher_id:
             pitcher_ids.add(game.home_pitcher_id)
         if game.away_pitcher_id:
             pitcher_ids.add(game.away_pitcher_id)
-    return hitter_ids | pitcher_ids
+    
+    print(f"Found {len(pitcher_ids)} starting pitchers for today/tomorrow")
+    
+    all_relevant_ids = hitter_ids | pitcher_ids
+    print(f"Total relevant players: {len(all_relevant_ids)}")
+    
+    return all_relevant_ids
 
 def fetch_and_store_stats(player_id):
     """Fetch and store stats for a single player with error handling. Only store hitting stats for hitters and pitching stats for pitchers."""
