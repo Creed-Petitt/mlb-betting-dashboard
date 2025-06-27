@@ -24,8 +24,12 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Environment variables
+# Environment variables and secrets
 .env
+.env.*
+*.env
+secrets.*
+config/*.env
 
 # Logs
 logs/
